@@ -133,6 +133,18 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
     </svg>
     <div id="nodes-layer"></div>
     <div id="drop-hint"><i class="ti ti-photo" style="font-size:32px;display:block;margin-bottom:8px"></i>ここに画像をドロップ</div>
+    <!-- Drop choice overlay -->
+    <div id="drop-choice-overlay" style="display:none;position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.45);z-index:250;align-items:center;justify-content:center">
+      <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-lg);padding:24px;display:flex;flex-direction:column;gap:14px;min-width:280px;text-align:center">
+        <p style="font-size:13px;font-weight:500" id="drop-choice-filename"></p>
+        <p style="font-size:12px;color:var(--color-text-secondary)">読み込み方法を選択してください</p>
+        <div style="display:flex;gap:10px">
+          <button id="drop-choice-overwrite" style="flex:1;justify-content:center"><i class="ti ti-replace"></i> 上書き</button>
+          <button id="drop-choice-append" style="flex:1;justify-content:center"><i class="ti ti-plus"></i> 追加</button>
+        </div>
+        <button id="drop-choice-cancel" style="justify-content:center;color:var(--color-text-tertiary)">キャンセル</button>
+      </div>
+    </div>
     <div id="toast"></div>
 
     <!-- Save/Load modal -->
@@ -152,7 +164,10 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
               <input type="file" id="mindmap-file-input" accept=".mindmap,.txt" style="display:none">
             </div>
             <div id="picked-file-name" style="font-size:11px;color:var(--color-text-tertiary);min-height:16px;text-align:center"></div>
-            <button id="modal-load-btn" disabled style="justify-content:center"><i class="ti ti-upload"></i> このファイルを読み込む</button>
+            <div style="display:flex;gap:8px">
+              <button id="modal-load-overwrite" disabled style="flex:1;justify-content:center"><i class="ti ti-replace"></i> 上書き</button>
+              <button id="modal-load-append" disabled style="flex:1;justify-content:center"><i class="ti ti-plus"></i> 追加</button>
+            </div>
           </div>
         </div>
 
@@ -582,6 +597,32 @@ function startInlineEdit(n){
     }
   });
 }
+let dropChoiceData=null;
+function showDropChoice(data, filename){
+  dropChoiceData=data;
+  document.getElementById('drop-choice-filename').textContent=filename;
+  const ov=document.getElementById('drop-choice-overlay');
+  ov.style.display='flex';
+}
+document.getElementById('drop-choice-overwrite').addEventListener('click',()=>{
+  if(!dropChoiceData)return;
+  const fname=document.getElementById('drop-choice-filename').textContent;
+  document.getElementById('drop-choice-overlay').style.display='none';
+  loadMap(dropChoiceData,'overwrite','✓ '+fname+' を上書きで読み込みました');
+  dropChoiceData=null;
+});
+document.getElementById('drop-choice-append').addEventListener('click',()=>{
+  if(!dropChoiceData)return;
+  const fname=document.getElementById('drop-choice-filename').textContent;
+  document.getElementById('drop-choice-overlay').style.display='none';
+  loadMap(dropChoiceData,'append','✓ '+fname+' を追加で読み込みました');
+  dropChoiceData=null;
+});
+document.getElementById('drop-choice-cancel').addEventListener('click',()=>{
+  document.getElementById('drop-choice-overlay').style.display='none';
+  dropChoiceData=null;
+});
+
 let toastTimer=null;
 function showToast(msg){
   const t=document.getElementById('toast');
@@ -714,18 +755,37 @@ canvas.addEventListener('wheel',e=>{
 // Prevent browser context menu on canvas
 canvas.addEventListener('contextmenu',e=>{if(!e.target.closest('.node-el')&&!e.target.closest('.img-node-el'))e.preventDefault();});
 
-// ── Drag & drop images onto canvas ───────────────────────
+// ── Drag & drop onto canvas ───────────────────────────────
+// Supports: image files → image node / .mindmap files → load map
 canvas.addEventListener('dragenter',e=>{e.preventDefault();canvas.classList.add('dragover');});
 canvas.addEventListener('dragover',e=>{e.preventDefault();e.dataTransfer.dropEffect='copy';});
 canvas.addEventListener('dragleave',e=>{if(!canvas.contains(e.relatedTarget))canvas.classList.remove('dragover');});
 canvas.addEventListener('drop',e=>{
   e.preventDefault();canvas.classList.remove('dragover');
-  const files=[...e.dataTransfer.files].filter(f=>f.type.startsWith('image/'));
+  const files=[...e.dataTransfer.files];
   if(!files.length)return;
+
+  // ── .mindmap file: show overwrite/append choice ──
+  const mapFile=files.find(f=>f.name.endsWith('.mindmap'));
+  if(mapFile){
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      const data=ev.target.result;
+      // Validate first
+      if(!deserialize(data)){showToast('⚠ 読み込み失敗：フォーマットが正しくありません');return;}
+      showDropChoice(data, mapFile.name);
+    };
+    reader.readAsText(mapFile);
+    return;
+  }
+
+  // ── image files: add as image nodes ──
+  const imgFiles=files.filter(f=>f.type.startsWith('image/'));
+  if(!imgFiles.length)return;
   const rect=canvas.getBoundingClientRect();
   const dropX=(e.clientX-rect.left-panX)/scale;
   const dropY=(e.clientY-rect.top-panY)/scale;
-  files.forEach((file,i)=>{
+  imgFiles.forEach((file,i)=>{
     const reader=new FileReader();
     reader.onload=ev=>{
       const n=makeImgNode(ev.target.result,dropX+i*200,dropY);
@@ -805,7 +865,8 @@ function showModalStatus(msg,isError){
 document.getElementById('btn-export').addEventListener('click',()=>{
   pickedFileData=null;
   document.getElementById('picked-file-name').textContent='';
-  document.getElementById('modal-load-btn').disabled=true;
+  document.getElementById('modal-load-overwrite').disabled=true;
+  document.getElementById('modal-load-append').disabled=true;
   modalStatus.textContent='';
   saveModal.classList.add('show');
 });
@@ -821,7 +882,8 @@ document.getElementById('mindmap-file-input').addEventListener('change',e=>{
   reader.onload=ev=>{
     pickedFileData=ev.target.result;
     document.getElementById('picked-file-name').textContent=file.name;
-    document.getElementById('modal-load-btn').disabled=false;
+    document.getElementById('modal-load-overwrite').disabled=false;
+    document.getElementById('modal-load-append').disabled=false;
     // Auto-fill save filename (strip extension)
     const base=file.name.replace(/\.mindmap$/i,'').replace(/\.txt$/i,'');
     document.getElementById('save-filename').value=base||'mindmap';
@@ -831,26 +893,57 @@ document.getElementById('mindmap-file-input').addEventListener('change',e=>{
   e.target.value='';
 });
 
-// Load button
-document.getElementById('modal-load-btn').addEventListener('click',()=>{
-  if(!pickedFileData){return;}
-  const result=deserialize(pickedFileData);
+// Shared load function: mode = 'overwrite' | 'append'
+function loadMap(data, mode, successMsg){
+  const result=deserialize(data);
   if(!result){
-    showModalStatus('⚠ 読み込みエラー：ファイルの形式が正しくありません',true);return;
+    showModalStatus('⚠ 読み込みエラー：ファイルの形式が正しくありません',true);
+    showToast('⚠ 読み込み失敗');
+    return false;
   }
-  nodesLayer.querySelectorAll('.node-el,.img-node-el').forEach(e=>e.remove());
   const collapsed=result.nodes._collapsed||[];
   delete result.nodes._collapsed;
   const loadedTitle=result.nodes._title||'';
   delete result.nodes._title;
-  if(loadedTitle){document.getElementById('map-title-text').textContent=loadedTitle;document.title='🗺 '+loadedTitle;}
-  nodes=result.nodes;edges=result.edges;nodeId=result.nodeId;
-  collapsedNodes=new Set(collapsed);
-  nodes.forEach(n=>{if(n.type==='image')createImgNodeEl(n);else createNodeEl(n);});
-  panX=0;panY=0;selected=null;
+
+  if(mode==='overwrite'){
+    nodesLayer.querySelectorAll('.node-el,.img-node-el').forEach(e=>e.remove());
+    nodes=result.nodes;edges=result.edges;nodeId=result.nodeId;
+    collapsedNodes=new Set(collapsed);
+    if(loadedTitle){document.getElementById('map-title-text').textContent=loadedTitle;document.title='🗺 '+loadedTitle;}
+    panX=0;panY=0;selected=null;
+  } else {
+    // append: remap ids to avoid collisions
+    const idOffset=nodeId;
+    result.nodes.forEach(n=>{n.id+=idOffset;});
+    result.edges.forEach(e=>{e.from+=idOffset;e.to+=idOffset;});
+    collapsed.forEach(id=>collapsedNodes.add(id+idOffset));
+    nodes=nodes.concat(result.nodes);
+    edges=edges.concat(result.edges);
+    nodeId=Math.max(nodeId,result.nodeId+idOffset);
+    selected=null;
+  }
+  result.nodes.forEach(n=>{if(n.type==='image')createImgNodeEl(n);else createNodeEl(n);});
   renderAll();pushHistory();
-  showModalStatus('✓ マップを読み込みました',false);
-  setTimeout(()=>saveModal.classList.remove('show'),800);
+  if(successMsg)showToast(successMsg);
+  return true;
+}
+
+// Overwrite button
+document.getElementById('modal-load-overwrite').addEventListener('click',()=>{
+  if(!pickedFileData)return;
+  if(loadMap(pickedFileData,'overwrite')){
+    showModalStatus('✓ 上書きで読み込みました',false);
+    setTimeout(()=>saveModal.classList.remove('show'),800);
+  }
+});
+// Append button
+document.getElementById('modal-load-append').addEventListener('click',()=>{
+  if(!pickedFileData)return;
+  if(loadMap(pickedFileData,'append')){
+    showModalStatus('✓ 追加で読み込みました',false);
+    setTimeout(()=>saveModal.classList.remove('show'),800);
+  }
 });
 
 // Save/Download button
