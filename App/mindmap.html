@@ -58,7 +58,7 @@ svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
 /* Text nodes */
 .node-el{position:absolute;transform:translate(-50%,-50%);cursor:pointer;z-index:10}
 .node-box{border-radius:20px;padding:8px 16px;font-size:13px;font-weight:500;white-space:nowrap;border:1.5px solid;text-align:center;min-width:80px;transition:box-shadow .15s,outline .1s}
-.node-box textarea{background:none!important;border:none!important;outline:none!important;font-size:inherit!important;font-weight:inherit!important;color:inherit!important;text-align:center!important;resize:none!important;font-family:inherit!important;white-space:pre-wrap!important;word-break:break-word!important;width:100%!important;min-width:80px!important;max-width:240px!important;overflow:hidden!important;display:block!important;line-height:1.4!important;padding:0!important;margin:0!important;height:auto!important;border-radius:0!important;background-color:transparent!important;}
+.node-box textarea{background:transparent;border:none;outline:none;font-size:inherit;font-weight:inherit;color:inherit;resize:none;font-family:inherit;white-space:pre;overflow:visible;display:block;line-height:1.5;padding:0;margin:0;border-radius:0;box-sizing:content-box;}
 .node-box.selected{outline:2.5px solid var(--color-text-info);outline-offset:2px}
 .node-box.root{font-size:15px;font-weight:600;padding:12px 22px;border-radius:24px}
 .node-box input{background:none;border:none;outline:none;font-size:inherit;font-weight:inherit;color:inherit;text-align:center;width:100%;min-width:60px;max-width:200px;font-family:inherit}
@@ -106,6 +106,8 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
 /* Toast */
 #toast{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);background:var(--color-text-primary);color:var(--color-background-primary);font-size:12px;padding:6px 14px;border-radius:20px;opacity:0;pointer-events:none;transition:opacity .2s;white-space:nowrap;z-index:300}
 #toast.show{opacity:.92}
+#map-title:hover .ti-pencil{opacity:.8}
+#map-title-text:focus{outline:none;border-bottom:1.5px solid var(--color-border-primary);}
 
 /* Collapsed parent indicator */
 .node-box.has-children::after{content:'▶';font-size:9px;margin-left:6px;opacity:.5;}
@@ -117,7 +119,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
 <body>
 <div id="app">
   <div id="header">
-    <h1>🗺 マインドマップ</h1>
+    <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+右クリック×2: 接続 | ホイール: ズーム | Shift+ドラッグ: 全体移動</span>
   </div>
   <div id="canvas">
@@ -282,6 +284,8 @@ function updateUndoRedo(){btnUndo.disabled=historyIdx<=0;btnRedo.disabled=histor
 // ── Serialization ─────────────────────────────────────────
 function serialize(){
   const lines=['MINDMAP v2'];
+  const titleText=document.getElementById('map-title-text').textContent.trim();
+  if(titleText&&titleText!=='マインドマップ')lines.push(`TITLE ${titleText}`);
   nodes.forEach(n=>{
     if(n.type==='image'){
       // encode comment (replace newlines)
@@ -289,7 +293,8 @@ function serialize(){
       const w=n.width||180;
       lines.push(`IMGNODE ${n.id} ${w} ${Math.round(n.x)} ${Math.round(n.y)} ${comment}||${n.src}`);
     } else {
-      lines.push(`NODE ${n.id} ${n.colorIdx} ${n.isRoot?1:0} ${Math.round(n.x)} ${Math.round(n.y)} ${n.text}`);
+      const safeText=n.text.replace(/\n/g,'\\n');
+      lines.push(`NODE ${n.id} ${n.colorIdx} ${n.isRoot?1:0} ${Math.round(n.x)} ${Math.round(n.y)} ${safeText}`);
     }
   });
   edges.forEach(e=>lines.push(`EDGE ${e.from} ${e.to}`));
@@ -304,7 +309,7 @@ function deserialize(text){
   for(const line of lines){
     if(line.startsWith('NODE ')){
       const m=line.match(/^NODE (\d+) (\d+) ([01]) (-?\d+) (-?\d+) (.+)$/);
-      if(m)ns.push({id:+m[1],type:'text',colorIdx:+m[2],isRoot:m[3]==='1',x:+m[4],y:+m[5],text:m[6]});
+      if(m)ns.push({id:+m[1],type:'text',colorIdx:+m[2],isRoot:m[3]==='1',x:+m[4],y:+m[5],text:m[6].replace(/\\n/g,'\n')});
     } else if(line.startsWith('IMGNODE ')){
       const rest=line.slice('IMGNODE '.length);
       const parts=rest.split(' ');
@@ -316,6 +321,8 @@ function deserialize(text){
       ns.push({id,type:'image',x,y,src,comment,width});
     } else if(line.startsWith('EDGE ')){
       const p=line.split(' ');es.push({from:+p[1],to:+p[2]});
+    } else if(line.startsWith('TITLE ')){
+      ns._title=line.slice(6);
     } else if(line.startsWith('COLLAPSED ')){
       const ids=line.slice('COLLAPSED '.length).split(',').map(Number).filter(Boolean);
       ns._collapsed=ids;
@@ -393,7 +400,8 @@ function renderTextNode(n){
   const isCollapsed=collapsedNodes.has(n.id);
   const hc=hasChildren(n.id);
   // white-space:pre keeps each line intact (no wrapping), width grows to fit longest line
-  const wsStyle=n.text.includes('\n')?'white-space:pre':'white-space:nowrap';
+  const multiline=n.text.includes('\n');
+  const wsStyle=multiline?'white-space:pre;text-align:left':'white-space:nowrap;text-align:center';
   el.innerHTML=`<div class="node-box${n.isRoot?' root':''}${selected===n.id||isPending?' selected':''}${hc?' has-children':''}${isCollapsed?' collapsed':''}" style="background:${c.bg};border-color:${isPending?'var(--color-text-info)':c.border};color:${c.text};${wsStyle}">${escHtml(n.text).replace(/\n/g,'<br>')}</div>`;
   const box=el.querySelector('.node-box');
   if(box)box.style.display='inline-block';
@@ -520,25 +528,35 @@ function startInlineEdit(n){
   if(!el){editingNodeId=null;return;}
   const prev=n.text;
   const c=getColors()[n.colorIdx];
-  el.innerHTML=`<div class="node-box${n.isRoot?' root':''} selected" style="background:${c.bg};border-color:${c.border};color:${c.text};display:inline-block"><textarea id="inp-${n.id}" rows="1" style="color:${c.text}"></textarea></div>`;
+  el.innerHTML=`<div class="node-box${n.isRoot?' root':''} selected" style="background:${c.bg};border-color:${c.border};color:${c.text};display:inline-block;padding:8px 16px;box-sizing:border-box"><textarea id="inp-${n.id}" style="color:${c.text}"></textarea></div>`;
   const ta=document.getElementById('inp-'+n.id);
-  ta.value=n.text;   // set value directly to preserve newlines without HTML-encoding issues
-  // auto-resize textarea
-  const lineHeightPx=18; // matches line-height:1.4 at font-size 13px
+  ta.value=n.text;
+
+  // Measure text width accurately using a hidden ruler span
+  const ruler=document.createElement('span');
+  ruler.style.cssText='position:absolute;visibility:hidden;white-space:pre;font-size:13px;font-family:'+getComputedStyle(ta).fontFamily+';padding:0;border:none';
+  document.body.appendChild(ruler);
+
+  const lineHeightPx=20; // 13px font * line-height 1.5
   function autoResize(){
-    const lines=ta.value.split('\n').length;
-    ta.style.height=(lines*lineHeightPx+2)+'px'; // height by line count only
-    ta.style.width='auto';
-    ta.style.width=Math.max(80,ta.scrollWidth+2)+'px'; // width by content
+    const lines=ta.value.split('\n');
+    const lineCount=lines.length;
+    // measure each line accurately with the ruler span
+    let maxW=60;
+    lines.forEach(line=>{
+      ruler.textContent=line||'';
+      maxW=Math.max(maxW,ruler.offsetWidth);
+    });
+    ta.style.width=maxW+'px';
+    ta.style.height=(lineCount*lineHeightPx)+'px';
   }
   autoResize();
   ta.focus();
-  // move cursor to end
   ta.selectionStart=ta.selectionEnd=ta.value.length;
   let lastEnterTime=0;
   function commit(){
+    ruler.remove();
     const val=ta.value;
-    // strip trailing blank lines but keep internal newlines
     n.text=val.replace(/\n+$/,'')||prev;
     editingNodeId=null;
     if(n.text!==prev)pushHistory();
@@ -822,6 +840,9 @@ document.getElementById('modal-load-btn').addEventListener('click',()=>{
   nodesLayer.querySelectorAll('.node-el,.img-node-el').forEach(e=>e.remove());
   const collapsed=result.nodes._collapsed||[];
   delete result.nodes._collapsed;
+  const loadedTitle=result.nodes._title||'';
+  delete result.nodes._title;
+  if(loadedTitle){document.getElementById('map-title-text').textContent=loadedTitle;document.title='🗺 '+loadedTitle;}
   nodes=result.nodes;edges=result.edges;nodeId=result.nodeId;
   collapsedNodes=new Set(collapsed);
   nodes.forEach(n=>{if(n.type==='image')createImgNodeEl(n);else createNodeEl(n);});
@@ -846,6 +867,27 @@ document.getElementById('modal-save-btn').addEventListener('click',()=>{
 
 document.getElementById('modal-close').addEventListener('click',()=>saveModal.classList.remove('show'));
 saveModal.addEventListener('click',e=>{if(e.target===saveModal)saveModal.classList.remove('show');});
+
+// ── Map title editing ────────────────────────────────────
+(function(){
+  const titleEl=document.getElementById('map-title-text');
+  document.getElementById('map-title').addEventListener('click',()=>{
+    titleEl.contentEditable='true';
+    titleEl.focus();
+    // select all
+    const range=document.createRange();range.selectNodeContents(titleEl);
+    const sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);
+  });
+  titleEl.addEventListener('keydown',e=>{
+    if(e.key==='Enter'){e.preventDefault();titleEl.blur();}
+    if(e.key==='Escape'){titleEl.blur();}
+  });
+  titleEl.addEventListener('blur',()=>{
+    titleEl.contentEditable='false';
+    // update document title
+    document.title='🗺 '+titleEl.textContent.trim();
+  });
+})();
 
 // ── Init ──────────────────────────────────────────────────
 const rect=canvas.getBoundingClientRect();
