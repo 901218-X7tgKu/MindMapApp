@@ -27,23 +27,21 @@
   --border-radius-md: 8px;
   --border-radius-lg: 12px;
 }
-@media (prefers-color-scheme: dark){
-  :root{
-    --color-background-primary: #1e1e1c;
-    --color-background-secondary: #2a2a28;
-    --color-background-info: #0c2a45;
-    --color-background-danger: #2e1212;
-    --color-text-primary: #e8e6de;
-    --color-text-secondary: #a8a69e;
-    --color-text-tertiary: #6e6c66;
-    --color-text-info: #85b7eb;
-    --color-text-success: #5dcaa5;
-    --color-text-danger: #f09595;
-    --color-border-tertiary: rgba(255,255,255,.1);
-    --color-border-secondary: rgba(255,255,255,.18);
-    --color-border-primary: rgba(255,255,255,.28);
-    --color-border-info: #185fa5;
-  }
+body.dark{
+  --color-background-primary: #1e1e1c;
+  --color-background-secondary: #2a2a28;
+  --color-background-info: #0c2a45;
+  --color-background-danger: #2e1212;
+  --color-text-primary: #e8e6de;
+  --color-text-secondary: #a8a69e;
+  --color-text-tertiary: #6e6c66;
+  --color-text-info: #85b7eb;
+  --color-text-success: #5dcaa5;
+  --color-text-danger: #f09595;
+  --color-border-tertiary: rgba(255,255,255,.1);
+  --color-border-secondary: rgba(255,255,255,.18);
+  --color-border-primary: rgba(255,255,255,.28);
+  --color-border-info: #185fa5;
 }
 html,body{height:100%;background:var(--color-background-secondary);color:var(--color-text-primary);font-family:var(--font-sans)}
 #app{display:flex;flex-direction:column;height:100vh}
@@ -129,6 +127,10 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+右クリック×2: 接続 | ホイール: ズーム | Shift+ドラッグ: 全体移動</span>
+    <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
+      <i id="theme-icon" class="ti ti-moon"></i>
+      <span id="theme-label">ダーク</span>
+    </button>
   </div>
   <div id="canvas">
     <svg id="svg-layer">
@@ -233,6 +235,8 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
     <button id="btn-c3" title="コーラル"><span class="color-dot" style="background:#D85A30"></span></button>
     <button id="btn-c4" title="パープル"><span class="color-dot" style="background:#7F77DD"></span></button>
     <button id="btn-c5" title="グレー"><span class="color-dot" style="background:#888780"></span></button>
+    <button id="btn-c6" title="ローズ"><span class="color-dot" style="background:#A3245A"></span></button>
+    <button id="btn-c7" title="グリーン"><span class="color-dot" style="background:#3F7A1A"></span></button>
     <div class="sep"></div>
     <button id="btn-delete" class="danger"><i class="ti ti-trash"></i> 削除</button>
     <div class="sep"></div>
@@ -259,6 +263,8 @@ const COLORS=[
   {bg:'#FAECE7',border:'#993C1D',text:'#712B13'},
   {bg:'#EEEDFE',border:'#534AB7',text:'#3C3489'},
   {bg:'#F1EFE8',border:'#5F5E5A',text:'#444441'},
+  {bg:'#FEF0F5',border:'#A3245A',text:'#7A1A42'},
+  {bg:'#F0FAE5',border:'#3F7A1A',text:'#2A5210'},
 ];
 const COLORS_DARK=[
   {bg:'#04342C',border:'#1D9E75',text:'#9FE1CB'},
@@ -267,8 +273,10 @@ const COLORS_DARK=[
   {bg:'#4A1B0C',border:'#993C1D',text:'#F5C4B3'},
   {bg:'#26215C',border:'#534AB7',text:'#CECBF6'},
   {bg:'#2C2C2A',border:'#5F5E5A',text:'#D3D1C7'},
+  {bg:'#3D0A20',border:'#C4527A',text:'#F0AABF'},
+  {bg:'#0F2A04',border:'#5FAA2A',text:'#B3E88A'},
 ];
-function isDark(){return window.matchMedia('(prefers-color-scheme: dark)').matches;}
+function isDark(){return document.body.classList.contains('dark');}
 function getColors(){return isDark()?COLORS_DARK:COLORS;}
 
 // nodes: {id, type:'text'|'image', x, y, colorIdx, isRoot, text}  (text nodes)
@@ -1228,6 +1236,28 @@ document.getElementById('modal-save-btn').addEventListener('click',()=>{
 document.getElementById('modal-close').addEventListener('click',()=>saveModal.classList.remove('show'));
 saveModal.addEventListener('click',e=>{if(e.target===saveModal)saveModal.classList.remove('show');});
 
+
+// ── Theme toggle ─────────────────────────────────────────
+(function(){
+  // Initialise from localStorage or system preference
+  const saved=localStorage.getItem('mindmap-theme');
+  const prefersDark=window.matchMedia('(prefers-color-scheme: dark)').matches;
+  if(saved==='dark'||(saved===null&&prefersDark)){
+    document.body.classList.add('dark');
+  }
+  function updateBtn(){
+    const dark=isDark();
+    document.getElementById('theme-icon').className=dark?'ti ti-sun':'ti ti-moon';
+    document.getElementById('theme-label').textContent=dark?'ライト':'ダーク';
+  }
+  updateBtn();
+  document.getElementById('btn-theme').addEventListener('click',()=>{
+    document.body.classList.toggle('dark');
+    localStorage.setItem('mindmap-theme',isDark()?'dark':'light');
+    updateBtn();
+    renderAll(); // re-render nodes with updated colours
+  });
+})();
 
 // ── Map title editing ────────────────────────────────────
 (function(){
