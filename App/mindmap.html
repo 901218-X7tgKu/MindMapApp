@@ -104,6 +104,13 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
 #img-modal .comment-ta{width:100%;height:90px;font-family:var(--font-sans);font-size:13px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);padding:10px;background:var(--color-background-secondary);color:var(--color-text-primary);resize:vertical;outline:none}
 #img-modal .comment-ta:focus{border-color:var(--color-border-primary)}
 
+/* Search highlight */
+.node-box.search-hit{outline:2.5px solid #f5a623;outline-offset:3px;}
+.node-box.search-current{outline:3px solid #e8430a;outline-offset:3px;}
+.img-node-wrap.search-hit{outline:2.5px solid #f5a623;outline-offset:3px;}
+.img-node-wrap.search-current{outline:3px solid #e8430a;outline-offset:3px;}
+#search-input:focus{border-color:var(--color-border-primary);}
+
 /* Toast */
 #toast{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);background:var(--color-text-primary);color:var(--color-background-primary);font-size:12px;padding:6px 14px;border-radius:20px;opacity:0;pointer-events:none;transition:opacity .2s;white-space:nowrap;z-index:300}
 #toast.show{opacity:.92}
@@ -230,6 +237,17 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
     <button id="btn-delete" class="danger"><i class="ti ti-trash"></i> 削除</button>
     <div class="sep"></div>
     <button id="btn-export"><i class="ti ti-file-export"></i> ファイル</button>
+    <div class="sep"></div>
+    <div id="search-wrap" style="display:flex;align-items:center;gap:4px">
+      <div style="position:relative;display:flex;align-items:center">
+        <i class="ti ti-search" style="position:absolute;left:7px;font-size:12px;color:var(--color-text-tertiary);pointer-events:none"></i>
+        <input id="search-input" type="text" placeholder="検索..." autocomplete="off"
+          style="font-size:12px;padding:4px 8px 4px 24px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);outline:none;width:140px;font-family:var(--font-sans)">
+      </div>
+      <button id="search-prev" title="前の結果" disabled><i class="ti ti-chevron-up"></i></button>
+      <button id="search-next" title="次の結果" disabled><i class="ti ti-chevron-down"></i></button>
+      <span id="search-count" style="font-size:11px;color:var(--color-text-tertiary);white-space:nowrap;min-width:40px"></span>
+    </div>
     <span id="hint">Ctrl+Z: Undo / Ctrl+Y: Redo</span>
   </div>
 </div>
@@ -415,10 +433,11 @@ function renderTextNode(n){
   const isPending=ctrlConnectPending===n.id;
   const isCollapsed=collapsedNodes.has(n.id);
   const hc=hasChildren(n.id);
+  const srchCls=getSearchState(n.id);
   // white-space:pre keeps each line intact (no wrapping), width grows to fit longest line
   const multiline=n.text.includes('\n');
   const wsStyle=multiline?'white-space:pre;text-align:left':'white-space:nowrap;text-align:center';
-  el.innerHTML=`<div class="node-box${n.isRoot?' root':''}${selected===n.id||isPending?' selected':''}${hc?' has-children':''}${isCollapsed?' collapsed':''}" style="background:${c.bg};border-color:${isPending?'var(--color-text-info)':c.border};color:${c.text};${wsStyle}">${escHtml(n.text).replace(/\n/g,'<br>')}</div>`;
+  el.innerHTML=`<div class="node-box${n.isRoot?' root':''}${selected===n.id||isPending?' selected':''}${hc?' has-children':''}${isCollapsed?' collapsed':''}${srchCls?' '+srchCls:''}" style="background:${c.bg};border-color:${isPending?'var(--color-text-info)':c.border};color:${c.text};${wsStyle}">${escHtml(n.text).replace(/\n/g,'<br>')}</div>`;
   const box=el.querySelector('.node-box');
   if(box)box.style.display='inline-block';
 }
@@ -571,32 +590,29 @@ function startInlineEdit(n){
   const prev=n.text;
   const c=getColors()[n.colorIdx];
 
-  // Render a fixed display box (shows current text) to measure natural width/height,
-  // then overlay an absolutely-positioned textarea on top so it can grow freely
-  // without being clipped by the parent transform.
-  const lineHeightPx=20;
-  const PAD_H=32, PAD_V=16; // padding: 8px top/bottom, 16px left/right
+  // Fixed screen-space constants (always 13px regardless of zoom)
+  const FONT_PX=13, LINE_H=20, PAD_H=32, PAD_V=16;
 
-  // Measure text dimensions via a hidden ruler
+  // Ruler measures text in screen pixels at FONT_PX
   const ruler=document.createElement('span');
-  ruler.style.cssText='position:fixed;visibility:hidden;white-space:pre;font-size:13px;font-weight:500;font-family:'+getComputedStyle(document.body).fontFamily+';padding:0;border:none;top:-9999px;left:-9999px';
+  ruler.style.cssText=`position:fixed;visibility:hidden;white-space:pre;font-size:${FONT_PX}px;font-weight:500;font-family:${getComputedStyle(document.body).fontFamily};padding:0;border:none;top:-9999px;left:-9999px`;
   document.body.appendChild(ruler);
 
   function calcSize(text){
     const lines=(text||'').split('\n');
     let maxW=60;
     lines.forEach(line=>{ruler.textContent=line||'M';maxW=Math.max(maxW,ruler.offsetWidth);});
-    return {w:Math.ceil(maxW)+4, h:lines.length*lineHeightPx+4};
+    return {w:Math.ceil(maxW)+6, h:lines.length*LINE_H+4};
   }
 
-  // Build display-box HTML (same as normal render) to position the textarea
-  el.innerHTML=`<div class="node-box${n.isRoot?' root':''} selected" id="editbox-${n.id}" style="background:${c.bg};border-color:${c.border};color:${c.text};display:inline-block;position:relative;white-space:nowrap">${escHtml(n.text).replace(/\n/g,'<br>')}</div>`;
+  // Placeholder display box — just to get the node's screen-space centre
+  el.innerHTML=`<div class="node-box${n.isRoot?' root':''} selected" id="editbox-${n.id}" style="background:${c.bg};border-color:${c.border};color:${c.text};display:inline-block;white-space:nowrap">${escHtml(n.text).replace(/\n/g,'<br>')}</div>`;
 
-  // Create floating textarea positioned over canvas (fixed, unaffected by scale/transform)
+  // Floating textarea: always rendered at screen-native size (no scale math)
   const ta=document.createElement('textarea');
   ta.id='inp-'+n.id;
   ta.value=n.text;
-  ta.style.cssText=`position:fixed;z-index:500;font-size:${13/scale}px;font-weight:500;font-family:inherit;line-height:${lineHeightPx/scale}px;padding:${8/scale}px ${16/scale}px;border-radius:${20/scale}px;border:${1.5/scale}px solid ${c.border};background:${c.bg};color:${c.text};resize:none;outline:none;overflow:hidden;white-space:pre;box-sizing:content-box;min-width:${60/scale}px`;
+  ta.style.cssText=`position:fixed;z-index:500;font-size:${FONT_PX}px;font-weight:500;font-family:inherit;line-height:${LINE_H}px;padding:8px 16px;border-radius:20px;border:1.5px solid ${c.border};background:${c.bg};color:${c.text};resize:none;outline:none;overflow:hidden;white-space:pre;box-sizing:content-box;`;
   document.body.appendChild(ta);
 
   function positionTA(){
@@ -604,27 +620,16 @@ function startInlineEdit(n){
     if(!box)return;
     const r=box.getBoundingClientRect();
     const sz=calcSize(ta.value);
-    const dispW=(sz.w+PAD_H)*scale, dispH=(sz.h+PAD_V)*scale;
-    // Centre the textarea over the display box centre
-    const cx=r.left+r.width/2, cy=r.top+r.height/2;
-    ta.style.width=(sz.w)+'px';
-    ta.style.height=(sz.h)+'px';
-    ta.style.left=(cx-dispW/2)+'px';
-    ta.style.top=(cy-dispH/2)+'px';
-    ta.style.fontSize=(13/scale)+'px';
-    ta.style.lineHeight=(lineHeightPx/scale)+'px';
-    ta.style.padding=(8/scale)+'px '+(16/scale)+'px';
-    ta.style.borderRadius=(20/scale)+'px';
-    ta.style.borderWidth=(1.5/scale)+'px';
-    ta.style.width=(sz.w)+'px';
-    ta.style.height=(sz.h)+'px';
+    const totalW=sz.w+PAD_H, totalH=sz.h+PAD_V;
+    ta.style.width=sz.w+'px';
+    ta.style.height=sz.h+'px';
+    ta.style.left=(r.left+r.width/2 - totalW/2)+'px';
+    ta.style.top=(r.top+r.height/2 - totalH/2)+'px';
   }
 
   positionTA();
   ta.focus();
   ta.selectionStart=ta.selectionEnd=ta.value.length;
-
-  let lastEnterTime=0;
   function commit(){
     ruler.remove();
     ta.remove();
@@ -638,10 +643,14 @@ function startInlineEdit(n){
   ta.addEventListener('keydown',ke=>{
     if(ke.key==='Escape'){ta.value=prev;ta.blur();return;}
     if(ke.key==='Enter'){
-      const now=Date.now();
-      if(now-lastEnterTime<600){ke.preventDefault();ta.value=ta.value.replace(/\n$/,'');ta.blur();return;}
-      lastEnterTime=now;
-      setTimeout(positionTA,0);
+      if(ke.shiftKey){
+        // Shift+Enter: commit edit
+        ke.preventDefault();
+        ta.blur();
+      } else {
+        // Enter only: insert newline (default), then reposition
+        setTimeout(positionTA,0);
+      }
     }
   });
 }
@@ -971,6 +980,102 @@ document.addEventListener('keydown',e=>{
   }
 });
 
+
+// ── Search ────────────────────────────────────────────────
+let searchResults=[];   // array of node ids matching current query
+let searchIdx=0;        // current result index
+
+function nodeMatchesQuery(n, q){
+  if(!q)return false;
+  const lower=q.toLowerCase();
+  if(n.type==='image') return (n.comment||'').toLowerCase().includes(lower);
+  return (n.text||'').toLowerCase().includes(lower);
+}
+
+function getSearchState(nodeId){
+  if(!searchResults.includes(nodeId))return '';
+  return searchResults[searchIdx]===nodeId?'search-current':'search-hit';
+}
+function applySearchHighlight(){
+  const inp=document.getElementById('search-input');
+  const q=inp?inp.value.trim():'';
+  if(!q||searchResults.length===0)return;
+  searchResults.forEach((id,i)=>{
+    const el=document.getElementById('node-'+id);
+    if(!el)return;
+    const box=el.querySelector('.node-box,.img-node-wrap');
+    if(!box)return;
+    box.classList.add(i===searchIdx?'search-current':'search-hit');
+  });
+}
+
+function doSearch(q){
+  searchResults=nodes.filter(n=>isNodeVisible(n.id)&&nodeMatchesQuery(n,q)).map(n=>n.id);
+  searchIdx=0;
+  updateSearchUI();
+  if(searchResults.length>0) centerOnNode(searchResults[0],false);
+  renderAll();
+  applySearchHighlight();
+}
+
+function updateSearchUI(){
+  const total=searchResults.length;
+  const inp=document.getElementById('search-input');
+  const hasQ=inp&&inp.value.trim().length>0;
+  document.getElementById('search-prev').disabled=total===0;
+  document.getElementById('search-next').disabled=total===0;
+  document.getElementById('search-count').textContent=
+    hasQ?(total>0?(searchIdx+1)+'/'+total:'0件'):'';
+  if(inp) inp.style.borderColor=hasQ&&total===0?'var(--color-text-danger)':'';
+}
+
+function centerOnNode(nodeId, andRender=true){
+  const n=nodes.find(nd=>nd.id===nodeId);
+  if(!n)return;
+  const rect=canvas.getBoundingClientRect();
+  panX=rect.width/2 - n.x*scale;
+  panY=rect.height/2 - n.y*scale;
+  selected=nodeId;
+  if(andRender){renderAll();applySearchHighlight();}
+}
+
+document.getElementById('search-input').addEventListener('input',function(){
+  const q=this.value.trim();
+  if(!q){searchResults=[];searchIdx=0;updateSearchUI();renderAll();return;}
+  doSearch(q);
+});
+document.getElementById('search-input').addEventListener('keydown',function(e){
+  if(e.key==='Enter'){
+    e.preventDefault();
+    if(searchResults.length===0)return;
+    searchIdx=(searchIdx+1)%searchResults.length;
+    centerOnNode(searchResults[searchIdx]);
+    updateSearchUI();
+  }
+  if(e.key==='Escape'){
+    this.value='';searchResults=[];searchIdx=0;updateSearchUI();renderAll();this.blur();
+  }
+});
+document.getElementById('search-next').addEventListener('click',()=>{
+  if(searchResults.length===0)return;
+  searchIdx=(searchIdx+1)%searchResults.length;
+  centerOnNode(searchResults[searchIdx]);
+  updateSearchUI();
+});
+document.getElementById('search-prev').addEventListener('click',()=>{
+  if(searchResults.length===0)return;
+  searchIdx=(searchIdx-1+searchResults.length)%searchResults.length;
+  centerOnNode(searchResults[searchIdx]);
+  updateSearchUI();
+});
+document.addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key==='f'&&!e.shiftKey){
+    e.preventDefault();
+    const inp=document.getElementById('search-input');
+    inp.focus();inp.select();
+  }
+});
+
 // ── Save/Load modal ───────────────────────────────────────
 const saveModal=document.getElementById('save-modal');
 const modalStatus=document.getElementById('modal-status');
@@ -1091,6 +1196,7 @@ document.getElementById('modal-save-btn').addEventListener('click',()=>{
 
 document.getElementById('modal-close').addEventListener('click',()=>saveModal.classList.remove('show'));
 saveModal.addEventListener('click',e=>{if(e.target===saveModal)saveModal.classList.remove('show');});
+
 
 // ── Map title editing ────────────────────────────────────
 (function(){
