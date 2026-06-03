@@ -843,12 +843,73 @@ COLORS.forEach((_,i)=>{
   });
 });
 
+// ── Copy / Paste ──────────────────────────────────────────
+let copiedNode=null;          // deep copy of the copied node
+let lastMousePos={x:0,y:0};  // track mouse position for paste location
+
+canvas.addEventListener('mousemove',e=>{
+  const rect=canvas.getBoundingClientRect();
+  lastMousePos={
+    x:(e.clientX-rect.left-panX)/scale,
+    y:(e.clientY-rect.top-panY)/scale
+  };
+});
+
 document.addEventListener('keydown',e=>{
   if(e.target.tagName==='TEXTAREA'||e.target.tagName==='INPUT')return;
   if((e.ctrlKey||e.metaKey)&&e.key==='z'){e.preventDefault();undo();}
   if((e.ctrlKey||e.metaKey)&&(e.key==='y'||(e.shiftKey&&e.key==='z'))){e.preventDefault();redo();}
   if(e.shiftKey&&e.key==='Q'){e.preventDefault();expandAll();}
   if(e.shiftKey&&e.key==='W'){e.preventDefault();collapseAll();}
+
+  // Ctrl+C: copy selected node
+  if((e.ctrlKey||e.metaKey)&&e.key==='c'&&!e.shiftKey){
+    if(selected===null)return;
+    const src=nodes.find(n=>n.id===selected);
+    if(!src)return;
+    copiedNode=JSON.parse(JSON.stringify(src)); // deep copy
+    showToast('✓ ノードをコピーしました');
+    e.preventDefault();
+  }
+
+  // Ctrl+V: paste copied node at current mouse position
+  if((e.ctrlKey||e.metaKey)&&e.key==='v'&&!e.shiftKey){
+    if(!copiedNode)return;
+    e.preventDefault();
+    const n=JSON.parse(JSON.stringify(copiedNode));
+    n.id=nodeId++;
+    n.isRoot=false;
+    n.x=lastMousePos.x+20;
+    n.y=lastMousePos.y+20;
+    nodes.push(n);
+    if(n.type==='image')createImgNodeEl(n);else createNodeEl(n);
+    selected=n.id;
+    pushHistory();renderAll();
+    showToast('✓ ノードを貼り付けました');
+  }
+
+  // Ctrl+Shift+V: paste image from clipboard
+  if((e.ctrlKey||e.metaKey)&&e.shiftKey&&e.key==='V'){
+    e.preventDefault();
+    navigator.clipboard.read().then(items=>{
+      for(const item of items){
+        const imgType=item.types.find(t=>t.startsWith('image/'));
+        if(!imgType)continue;
+        item.getType(imgType).then(blob=>{
+          const reader=new FileReader();
+          reader.onload=ev=>{
+            const n=makeImgNode(ev.target.result,lastMousePos.x,lastMousePos.y);
+            selected=n.id;pushHistory();renderAll();
+            showToast('✓ クリップボードの画像を貼り付けました');
+          };
+          reader.readAsDataURL(blob);
+        });
+        break;
+      }
+    }).catch(()=>{
+      showToast('⚠ クリップボードへのアクセスを許可してください');
+    });
+  }
 });
 
 // ── Save/Load modal ───────────────────────────────────────
