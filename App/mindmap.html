@@ -557,7 +557,7 @@ function onNodeClick(e,n){
     else if(connectFrom!==n.id){
       const exists=edges.find(ed=>(ed.from===connectFrom&&ed.to===n.id)||(ed.from===n.id&&ed.to===connectFrom));
       if(!exists){
-        if(wouldCreateCycle(connectFrom,n.id)||wouldCreateCycle(n.id,connectFrom)){
+        if(wouldCreateCycle(connectFrom,n.id)){
           showToast('⚠ ループが生じるため接続できません');
         } else {
           edges.push({from:connectFrom,to:n.id});pushHistory();
@@ -698,18 +698,19 @@ function showToast(msg){
 }
 // ── Cycle detection ───────────────────────────────────────
 // Returns true if adding edge from→to would create a cycle.
-// (i.e. 'to' is already an ancestor of 'from')
+// A cycle occurs only if 'from' is already a descendant of 'to'
+// (i.e. there is a path to→...→from in existing edges).
 function wouldCreateCycle(fromId, toId){
-  // DFS upward from fromId through existing edges; if we reach toId, it's a cycle
+  // DFS downward from toId; if we reach fromId, adding from→to would create a cycle
   const visited=new Set();
-  const stack=[fromId];
+  const stack=[toId];
   while(stack.length){
     const cur=stack.pop();
-    if(cur===toId)return true;
+    if(cur===fromId)return true;
     if(visited.has(cur))continue;
     visited.add(cur);
     for(const e of edges){
-      if(e.to===cur&&!visited.has(e.from))stack.push(e.from);
+      if(e.from===cur&&!visited.has(e.to))stack.push(e.to);
     }
   }
   return false;
@@ -724,7 +725,7 @@ function ctrlConnectNode(n){
     const existsIdx=edges.findIndex(ed=>(ed.from===ctrlConnectPending&&ed.to===n.id)||(ed.from===n.id&&ed.to===ctrlConnectPending));
     if(existsIdx>=0){
       edges.splice(existsIdx,1);showToast('接続を削除しました');
-    } else if(wouldCreateCycle(ctrlConnectPending,n.id)||wouldCreateCycle(n.id,ctrlConnectPending)){
+    } else if(wouldCreateCycle(ctrlConnectPending,n.id)){
       showToast('⚠ ループが生じるため接続できません');
     } else {
       edges.push({from:ctrlConnectPending,to:n.id});showToast('接続しました');
