@@ -556,7 +556,13 @@ function onNodeClick(e,n){
     if(connectFrom===null){connectFrom=n.id;}
     else if(connectFrom!==n.id){
       const exists=edges.find(ed=>(ed.from===connectFrom&&ed.to===n.id)||(ed.from===n.id&&ed.to===connectFrom));
-      if(!exists){edges.push({from:connectFrom,to:n.id});pushHistory();}
+      if(!exists){
+        if(wouldCreateCycle(connectFrom,n.id)||wouldCreateCycle(n.id,connectFrom)){
+          showToast('⚠ ループが生じるため接続できません');
+        } else {
+          edges.push({from:connectFrom,to:n.id});pushHistory();
+        }
+      }
       connectFrom=null;connecting=false;canvas.classList.remove('connecting');
       document.getElementById('btn-connect').classList.remove('active');renderEdges();
     }
@@ -690,6 +696,25 @@ function showToast(msg){
   clearTimeout(toastTimer);
   toastTimer=setTimeout(()=>t.classList.remove('show'),2200);
 }
+// ── Cycle detection ───────────────────────────────────────
+// Returns true if adding edge from→to would create a cycle.
+// (i.e. 'to' is already an ancestor of 'from')
+function wouldCreateCycle(fromId, toId){
+  // DFS upward from fromId through existing edges; if we reach toId, it's a cycle
+  const visited=new Set();
+  const stack=[fromId];
+  while(stack.length){
+    const cur=stack.pop();
+    if(cur===toId)return true;
+    if(visited.has(cur))continue;
+    visited.add(cur);
+    for(const e of edges){
+      if(e.to===cur&&!visited.has(e.from))stack.push(e.from);
+    }
+  }
+  return false;
+}
+
 function ctrlConnectNode(n){
   if(ctrlConnectPending===null){
     ctrlConnectPending=n.id;
@@ -697,8 +722,13 @@ function ctrlConnectNode(n){
     showToast('もう一方のノードをCtrl+右クリック');
   } else if(ctrlConnectPending!==n.id){
     const existsIdx=edges.findIndex(ed=>(ed.from===ctrlConnectPending&&ed.to===n.id)||(ed.from===n.id&&ed.to===ctrlConnectPending));
-    if(existsIdx>=0){edges.splice(existsIdx,1);showToast('接続を削除しました');}
-    else{edges.push({from:ctrlConnectPending,to:n.id});showToast('接続しました');}
+    if(existsIdx>=0){
+      edges.splice(existsIdx,1);showToast('接続を削除しました');
+    } else if(wouldCreateCycle(ctrlConnectPending,n.id)||wouldCreateCycle(n.id,ctrlConnectPending)){
+      showToast('⚠ ループが生じるため接続できません');
+    } else {
+      edges.push({from:ctrlConnectPending,to:n.id});showToast('接続しました');
+    }
     pushHistory();
     ctrlConnectPending=null;
     renderAll();
