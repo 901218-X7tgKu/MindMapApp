@@ -58,7 +58,8 @@ svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
 /* Text nodes */
 .node-el{position:absolute;transform:translate(-50%,-50%);cursor:pointer;z-index:10}
 .node-box{border-radius:20px;padding:8px 16px;font-size:13px;font-weight:500;white-space:nowrap;border:1.5px solid;text-align:center;min-width:80px;transition:box-shadow .15s,outline .1s}
-.node-box textarea{background:transparent;border:none;outline:none;font-size:inherit;font-weight:inherit;color:inherit;resize:none;font-family:inherit;white-space:pre;overflow:visible;display:block;line-height:1.5;padding:0;margin:0;border-radius:0;box-sizing:content-box;}
+.node-box textarea::-webkit-scrollbar{display:none}
+.node-box textarea{background:transparent;border:none;outline:none;font-size:inherit;font-weight:inherit;color:inherit;resize:none;font-family:inherit;white-space:pre;overflow:hidden;display:block;line-height:1.5;padding:0;margin:0;border-radius:0;box-sizing:content-box;scrollbar-width:none;}
 .node-box.selected{outline:2.5px solid var(--color-text-info);outline-offset:2px}
 .node-box.root{font-size:15px;font-weight:600;padding:12px 22px;border-radius:24px}
 .node-box input{background:none;border:none;outline:none;font-size:inherit;font-weight:inherit;color:inherit;text-align:center;width:100%;min-width:60px;max-width:200px;font-family:inherit}
