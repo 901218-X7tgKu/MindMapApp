@@ -66,10 +66,10 @@ svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
 
 /* Image nodes */
 .img-node-el{position:absolute;transform:translate(-50%,-50%);cursor:pointer;z-index:10}
-.img-node-wrap{border-radius:12px;border:1.5px solid var(--color-border-secondary);background:var(--color-background-primary);overflow:hidden;transition:outline .1s;width:180px}
-.img-node-wrap.selected{outline:2.5px solid var(--color-text-info);outline-offset:2px}
-.img-node-wrap img{width:100%;height:120px;object-fit:cover;display:block}
-.img-node-caption{padding:6px 10px;font-size:11px;color:var(--color-text-secondary);border-top:0.5px solid var(--color-border-tertiary);background:var(--color-background-primary);min-height:28px;word-break:break-all;white-space:pre-wrap;cursor:text}
+.img-node-wrap{border-radius:12px;border:1.5px solid var(--color-border-secondary);background:var(--color-background-primary);overflow:visible;transition:outline .1s;display:inline-block}
+.img-node-wrap.selected{outline:2.5px solid var(--color-text-info);outline-offset:2px;border-radius:12px}
+.img-node-wrap img{display:block;border-radius:12px 12px 0 0}
+.img-node-caption{padding:6px 10px;font-size:11px;color:var(--color-text-secondary);border-top:0.5px solid var(--color-border-tertiary);border-radius:0 0 12px 12px;background:var(--color-background-primary);word-break:break-all;white-space:pre-wrap;cursor:text;border:1.5px solid var(--color-border-secondary);border-top:none}
 .img-node-caption.empty{color:var(--color-text-tertiary);font-style:italic}
 .img-node-caption input,.img-node-caption textarea{width:100%;background:none;border:none;outline:none;font-size:11px;color:var(--color-text-primary);font-family:inherit;resize:none;padding:0}
 
@@ -364,20 +364,20 @@ function getAllDescendants(nodeId,result=new Set()){
   return result;
 }
 function isNodeVisible(nodeId){
-  const visited=new Set();
-  function check(id){
+  // A node is hidden only if at least one of its ancestors is collapsed.
+  function hasCollapsedAncestor(id, visited){
     for(const e of edges){
       if(e.to===id){
         const pid=e.from;
         if(visited.has(pid))continue;
         visited.add(pid);
-        if(collapsedNodes.has(pid))return false;
-        if(!check(pid))return false;
+        if(collapsedNodes.has(pid))return true;
+        if(hasCollapsedAncestor(pid,visited))return true;
       }
     }
-    return true;
+    return false;
   }
-  return check(nodeId);
+  return !hasCollapsedAncestor(nodeId,new Set());
 }
 function toggleCollapse(n){
   if(!hasChildren(n.id))return;
@@ -439,16 +439,42 @@ function renderImgNode(n){
   el.style.left=sx+'px';
   el.style.top=sy+'px';
   el.style.transform=`translate(-50%,-50%) scale(${scale})`;
-  const w=n.width||180;
   const isPending=ctrlConnectPending===n.id;
   const visible=isNodeVisible(n.id);
   el.classList.toggle('hidden',!visible);
   if(!visible)return;
   const capText=n.comment?escHtml(n.comment):'<span style="color:var(--color-text-tertiary);font-style:italic">右クリックでコメント追加</span>';
-  el.innerHTML=`<div class="img-node-wrap${selected===n.id||isPending?' selected':''}" style="width:${w}px;border-color:${isPending?'var(--color-text-info)':''}">
-    <img src="${n.src}" alt="image node" draggable="false" style="height:${Math.round(w*2/3)}px">
+  // Determine display width: stored n.width, or derive from natural image size (max 400px)
+  const MAX_IMG_W=400;
+  function buildHtml(dispW,dispH){
+    return `<div class="img-node-wrap${selected===n.id||isPending?' selected':''}" style="width:${dispW}px;border-color:${isPending?'var(--color-text-info)':''}">
+    <img src="${n.src}" alt="image node" draggable="false" style="width:${dispW}px;height:${dispH}px;object-fit:contain">
     <div class="img-node-caption">${capText}</div>
   </div>`;
+  }
+  if(n.naturalW&&n.naturalH){
+    // use cached natural dimensions
+    const ratio=n.naturalW/n.naturalH;
+    let dispW=n.width||Math.min(n.naturalW,MAX_IMG_W);
+    let dispH=Math.round(dispW/ratio);
+    el.innerHTML=buildHtml(dispW,dispH);
+  } else {
+    // load image to get natural dimensions, then re-render
+    const tmp=new Image();
+    tmp.onload=()=>{
+      n.naturalW=tmp.naturalWidth||180;
+      n.naturalH=tmp.naturalHeight||120;
+      if(!n.width){
+        const ratio=n.naturalW/n.naturalH;
+        n.width=Math.min(n.naturalW,MAX_IMG_W);
+        n.height=Math.round(n.width/ratio);
+      }
+      renderImgNode(n); // re-render with dimensions
+    };
+    tmp.src=n.src;
+    // Render placeholder while loading
+    el.innerHTML=buildHtml(n.width||180,n.height||120);
+  }
 }
 
 function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
@@ -477,8 +503,8 @@ function makeTextNode(text,x,y,colorIdx=0,isRoot=false){
   const n={id:nodeId++,type:'text',text,x,y,colorIdx,isRoot};
   nodes.push(n);createNodeEl(n);renderNode(n);renderEdges();return n;
 }
-function makeImgNode(src,x,y,comment='',width=180){
-  const n={id:nodeId++,type:'image',src,x,y,comment,width};
+function makeImgNode(src,x,y,comment='',width=0){
+  const n={id:nodeId++,type:'image',src,x,y,comment,width,naturalW:0,naturalH:0};
   nodes.push(n);createImgNodeEl(n);renderNode(n);renderEdges();return n;
 }
 
@@ -529,9 +555,9 @@ function onNodeClick(e,n){
   selected=n.id;renderAll();
 }
 function deleteNode(n){
-  if(n.isRoot)return;
   nodes=nodes.filter(nd=>nd.id!==n.id);
   edges=edges.filter(ed=>ed.from!==n.id&&ed.to!==n.id);
+  collapsedNodes.delete(n.id);
   const el=document.getElementById('node-'+n.id);if(el)el.remove();
   if(selected===n.id)selected=null;
   pushHistory();renderEdges();
@@ -544,56 +570,78 @@ function startInlineEdit(n){
   if(!el){editingNodeId=null;return;}
   const prev=n.text;
   const c=getColors()[n.colorIdx];
-  el.innerHTML=`<div class="node-box${n.isRoot?' root':''} selected" style="background:${c.bg};border-color:${c.border};color:${c.text};display:inline-block;padding:8px 16px;box-sizing:border-box"><textarea id="inp-${n.id}" style="color:${c.text}"></textarea></div>`;
-  const ta=document.getElementById('inp-'+n.id);
-  ta.value=n.text;
 
-  // Measure text width accurately using a hidden ruler span
+  // Render a fixed display box (shows current text) to measure natural width/height,
+  // then overlay an absolutely-positioned textarea on top so it can grow freely
+  // without being clipped by the parent transform.
+  const lineHeightPx=20;
+  const PAD_H=32, PAD_V=16; // padding: 8px top/bottom, 16px left/right
+
+  // Measure text dimensions via a hidden ruler
   const ruler=document.createElement('span');
-  ruler.style.cssText='position:absolute;visibility:hidden;white-space:pre;font-size:13px;font-family:'+getComputedStyle(ta).fontFamily+';padding:0;border:none';
+  ruler.style.cssText='position:fixed;visibility:hidden;white-space:pre;font-size:13px;font-weight:500;font-family:'+getComputedStyle(document.body).fontFamily+';padding:0;border:none;top:-9999px;left:-9999px';
   document.body.appendChild(ruler);
 
-  const lineHeightPx=20; // 13px font * line-height 1.5
-  function autoResize(){
-    const lines=ta.value.split('\n');
-    const lineCount=lines.length;
-    // measure each line accurately with the ruler span
+  function calcSize(text){
+    const lines=(text||'').split('\n');
     let maxW=60;
-    lines.forEach(line=>{
-      ruler.textContent=line||'';
-      maxW=Math.max(maxW,ruler.offsetWidth);
-    });
-    ta.style.width=maxW+'px';
-    ta.style.height=(lineCount*lineHeightPx)+'px';
+    lines.forEach(line=>{ruler.textContent=line||'M';maxW=Math.max(maxW,ruler.offsetWidth);});
+    return {w:Math.ceil(maxW)+4, h:lines.length*lineHeightPx+4};
   }
-  autoResize();
+
+  // Build display-box HTML (same as normal render) to position the textarea
+  el.innerHTML=`<div class="node-box${n.isRoot?' root':''} selected" id="editbox-${n.id}" style="background:${c.bg};border-color:${c.border};color:${c.text};display:inline-block;position:relative;white-space:nowrap">${escHtml(n.text).replace(/\n/g,'<br>')}</div>`;
+
+  // Create floating textarea positioned over canvas (fixed, unaffected by scale/transform)
+  const ta=document.createElement('textarea');
+  ta.id='inp-'+n.id;
+  ta.value=n.text;
+  ta.style.cssText=`position:fixed;z-index:500;font-size:${13/scale}px;font-weight:500;font-family:inherit;line-height:${lineHeightPx/scale}px;padding:${8/scale}px ${16/scale}px;border-radius:${20/scale}px;border:${1.5/scale}px solid ${c.border};background:${c.bg};color:${c.text};resize:none;outline:none;overflow:hidden;white-space:pre;box-sizing:content-box;min-width:${60/scale}px`;
+  document.body.appendChild(ta);
+
+  function positionTA(){
+    const box=document.getElementById('editbox-'+n.id);
+    if(!box)return;
+    const r=box.getBoundingClientRect();
+    const sz=calcSize(ta.value);
+    const dispW=(sz.w+PAD_H)*scale, dispH=(sz.h+PAD_V)*scale;
+    // Centre the textarea over the display box centre
+    const cx=r.left+r.width/2, cy=r.top+r.height/2;
+    ta.style.width=(sz.w)+'px';
+    ta.style.height=(sz.h)+'px';
+    ta.style.left=(cx-dispW/2)+'px';
+    ta.style.top=(cy-dispH/2)+'px';
+    ta.style.fontSize=(13/scale)+'px';
+    ta.style.lineHeight=(lineHeightPx/scale)+'px';
+    ta.style.padding=(8/scale)+'px '+(16/scale)+'px';
+    ta.style.borderRadius=(20/scale)+'px';
+    ta.style.borderWidth=(1.5/scale)+'px';
+    ta.style.width=(sz.w)+'px';
+    ta.style.height=(sz.h)+'px';
+  }
+
+  positionTA();
   ta.focus();
   ta.selectionStart=ta.selectionEnd=ta.value.length;
+
   let lastEnterTime=0;
   function commit(){
     ruler.remove();
-    const val=ta.value;
-    n.text=val.replace(/\n+$/,'')||prev;
+    ta.remove();
+    n.text=ta.value.replace(/\n+$/,'')||prev;
     editingNodeId=null;
     if(n.text!==prev)pushHistory();
     renderAll();
   }
   ta.addEventListener('blur',commit,{once:true});
-  ta.addEventListener('input',autoResize);
+  ta.addEventListener('input',positionTA);
   ta.addEventListener('keydown',ke=>{
     if(ke.key==='Escape'){ta.value=prev;ta.blur();return;}
     if(ke.key==='Enter'){
       const now=Date.now();
-      if(now-lastEnterTime<600){
-        // double Enter: remove last newline and commit
-        ke.preventDefault();
-        ta.value=ta.value.replace(/\n$/,'');
-        ta.blur();
-        return;
-      }
+      if(now-lastEnterTime<600){ke.preventDefault();ta.value=ta.value.replace(/\n$/,'');ta.blur();return;}
       lastEnterTime=now;
-      // single Enter: allow newline (default behaviour)
-      setTimeout(autoResize,0);
+      setTimeout(positionTA,0);
     }
   });
 }
@@ -609,6 +657,9 @@ document.getElementById('drop-choice-overwrite').addEventListener('click',()=>{
   const fname=document.getElementById('drop-choice-filename').textContent;
   document.getElementById('drop-choice-overlay').style.display='none';
   loadMap(dropChoiceData,'overwrite','✓ '+fname+' を上書きで読み込みました');
+  // Set save filename to the loaded file's name (without extension)
+  const base=fname.replace(/\.mindmap$/i,'');
+  if(base)document.getElementById('save-filename').value=base;
   dropChoiceData=null;
 });
 document.getElementById('drop-choice-append').addEventListener('click',()=>{
@@ -677,8 +728,15 @@ function openImgModal(n){
 }
 // live preview of slider
 document.getElementById('img-modal-width').addEventListener('input',function(){
-  document.getElementById('img-modal-width-label').textContent=this.value+' px';
-  if(editingImgNode){editingImgNode.width=+this.value;renderAll();}
+  const w=+this.value;
+  document.getElementById('img-modal-width-label').textContent=w+' px';
+  if(editingImgNode){
+    editingImgNode.width=w;
+    if(editingImgNode.naturalW&&editingImgNode.naturalH){
+      editingImgNode.height=Math.round(w*editingImgNode.naturalH/editingImgNode.naturalW);
+    }
+    renderAll();
+  }
 });
 document.getElementById('img-modal-save').addEventListener('click',()=>{
   if(!editingImgNode)return;
@@ -828,10 +886,9 @@ document.getElementById('file-input').addEventListener('change',e=>{
 
 document.getElementById('btn-delete').addEventListener('click',()=>{
   if(selected===null)return;
-  const sel=nodes.find(n=>n.id===selected);
-  if(sel&&sel.isRoot)return;
   nodes=nodes.filter(n=>n.id!==selected);
   edges=edges.filter(e=>e.from!==selected&&e.to!==selected);
+  collapsedNodes.delete(selected);
   const el=document.getElementById('node-'+selected);if(el)el.remove();
   selected=null;pushHistory();renderEdges();
 });
@@ -872,8 +929,33 @@ document.addEventListener('keydown',e=>{
     e.preventDefault();
   }
 
-  // Ctrl+V: paste copied node at current mouse position
-  if((e.ctrlKey||e.metaKey)&&e.key==='v'&&!e.shiftKey){
+});
+
+// ── Ctrl+V: paste image from clipboard only ──────────────
+document.addEventListener('paste',e=>{
+  if(e.target.tagName==='TEXTAREA'||e.target.tagName==='INPUT')return;
+  const items=e.clipboardData&&e.clipboardData.items;
+  if(!items)return;
+  for(const item of items){
+    if(!item.type.startsWith('image/'))continue;
+    e.preventDefault();
+    const blob=item.getAsFile();
+    if(!blob)continue;
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      const n=makeImgNode(ev.target.result,lastMousePos.x,lastMousePos.y);
+      selected=n.id;pushHistory();renderAll();
+      showToast('✓ クリップボードの画像を貼り付けました');
+    };
+    reader.readAsDataURL(blob);
+    return;
+  }
+});
+
+// ── Ctrl+Shift+V: paste copied node ──────────────────────
+document.addEventListener('keydown',e=>{
+  if(e.target.tagName==='TEXTAREA'||e.target.tagName==='INPUT')return;
+  if((e.ctrlKey||e.metaKey)&&e.shiftKey&&e.key==='V'){
     if(!copiedNode)return;
     e.preventDefault();
     const n=JSON.parse(JSON.stringify(copiedNode));
@@ -886,29 +968,6 @@ document.addEventListener('keydown',e=>{
     selected=n.id;
     pushHistory();renderAll();
     showToast('✓ ノードを貼り付けました');
-  }
-
-  // Ctrl+Shift+V: paste image from clipboard
-  if((e.ctrlKey||e.metaKey)&&e.shiftKey&&e.key==='V'){
-    e.preventDefault();
-    navigator.clipboard.read().then(items=>{
-      for(const item of items){
-        const imgType=item.types.find(t=>t.startsWith('image/'));
-        if(!imgType)continue;
-        item.getType(imgType).then(blob=>{
-          const reader=new FileReader();
-          reader.onload=ev=>{
-            const n=makeImgNode(ev.target.result,lastMousePos.x,lastMousePos.y);
-            selected=n.id;pushHistory();renderAll();
-            showToast('✓ クリップボードの画像を貼り付けました');
-          };
-          reader.readAsDataURL(blob);
-        });
-        break;
-      }
-    }).catch(()=>{
-      showToast('⚠ クリップボードへのアクセスを許可してください');
-    });
   }
 });
 
@@ -967,11 +1026,21 @@ function loadMap(data, mode, successMsg){
   const loadedTitle=result.nodes._title||'';
   delete result.nodes._title;
 
+  // Remove ghost edges (referencing node IDs that don't exist in result.nodes)
+  const validIds=new Set(result.nodes.map(n=>n.id));
+  result.edges=result.edges.filter(e=>validIds.has(e.from)&&validIds.has(e.to));
+
   if(mode==='overwrite'){
     nodesLayer.querySelectorAll('.node-el,.img-node-el').forEach(e=>e.remove());
     nodes=result.nodes;edges=result.edges;nodeId=result.nodeId;
     collapsedNodes=new Set(collapsed);
     if(loadedTitle){document.getElementById('map-title-text').textContent=loadedTitle;document.title='🗺 '+loadedTitle;}
+    // Shift all nodes so the topmost is at least 20px below top of canvas (world-space)
+    if(nodes.length>0){
+      const minY=Math.min(...nodes.map(n=>n.y));
+      const shiftY=minY<20?20-minY:0;
+      if(shiftY>0)nodes.forEach(n=>{n.y+=shiftY;});
+    }
     panX=0;panY=0;selected=null;
   } else {
     // append: remap ids to avoid collisions
