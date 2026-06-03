@@ -190,6 +190,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
               <span style="font-size:12px;color:var(--color-text-tertiary)">.mindmap</span>
             </div>
             <button id="modal-save-btn" style="justify-content:center"><i class="ti ti-download"></i> ダウンロード保存</button>
+            <button id="modal-save-public-btn" style="justify-content:center;margin-top:2px"><i class="ti ti-world"></i> 公開用 HTML をダウンロード</button>
           </div>
         </div>
 
@@ -966,6 +967,8 @@ document.addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&(e.key==='y'||(e.shiftKey&&e.key==='z'))){e.preventDefault();redo();}
   if(e.shiftKey&&e.key==='Q'){e.preventDefault();expandAll();}
   if(e.shiftKey&&e.key==='W'){e.preventDefault();collapseAll();}
+  if(e.shiftKey&&e.key==='D'){e.preventDefault();const f=downloadSave();showToast('✓ '+f+' を保存しました');}
+  if(e.shiftKey&&e.key==='P'){e.preventDefault();const f=downloadPublicHtml();showToast('✓ '+f+' を保存しました');}
 
   // Ctrl+C: copy selected node
   if((e.ctrlKey||e.metaKey)&&e.key==='c'&&!e.shiftKey){
@@ -1220,8 +1223,336 @@ document.getElementById('modal-load-append').addEventListener('click',()=>{
   }
 });
 
+// ── Public HTML export ────────────────────────────────────
+function generatePublicHtml(){
+  const title=document.getElementById('map-title-text').textContent.trim()||'マインドマップ';
+  const mapData=serialize();
+  const isDarkNow=isDark();
+
+  const publicScript=`
+const COLORS_L=[
+  {bg:'#E1F5EE',border:'#0F6E56',text:'#085041'},
+  {bg:'#E6F1FB',border:'#185FA5',text:'#0C447C'},
+  {bg:'#FAEEDA',border:'#854F0B',text:'#633806'},
+  {bg:'#FAECE7',border:'#993C1D',text:'#712B13'},
+  {bg:'#EEEDFE',border:'#534AB7',text:'#3C3489'},
+  {bg:'#F1EFE8',border:'#5F5E5A',text:'#444441'},
+  {bg:'#FEF0F5',border:'#A3245A',text:'#7A1A42'},
+  {bg:'#F0FAE5',border:'#3F7A1A',text:'#2A5210'},
+];
+const COLORS_D=[
+  {bg:'#04342C',border:'#1D9E75',text:'#9FE1CB'},
+  {bg:'#042C53',border:'#185FA5',text:'#B5D4F4'},
+  {bg:'#412402',border:'#BA7517',text:'#FAC775'},
+  {bg:'#4A1B0C',border:'#993C1D',text:'#F5C4B3'},
+  {bg:'#26215C',border:'#534AB7',text:'#CECBF6'},
+  {bg:'#2C2C2A',border:'#5F5E5A',text:'#D3D1C7'},
+  {bg:'#3D0A20',border:'#C4527A',text:'#F0AABF'},
+  {bg:'#0F2A04',border:'#5FAA2A',text:'#B3E88A'},
+];
+function getColors(){return document.body.classList.contains('dark')?COLORS_D:COLORS_L;}
+
+const RAW=${JSON.stringify(mapData)};
+
+function deserialize(text){
+  const lines=text.trim().split('\\n');
+  if(!lines[0].startsWith('MINDMAP'))return null;
+  const ns=[],es=[];let nid=0;
+  for(const line of lines){
+    if(line.startsWith('NODE ')){
+      const m=line.match(/^NODE (\\d+) (\\d+) ([01]) (-?\\d+) (-?\\d+) (.+)$/);
+      if(m)ns.push({id:+m[1],type:'text',colorIdx:+m[2],isRoot:m[3]==='1',x:+m[4],y:+m[5],text:m[6].replace(/\\\\n/g,'\\n')});
+    } else if(line.startsWith('IMGNODE ')){
+      const rest=line.slice(8);const parts=rest.split(' ');
+      const id=+parts[0],width=+parts[1]||180,x=+parts[2],y=+parts[3];
+      const payload=parts.slice(4).join(' ');const sep=payload.indexOf('||');
+      const comment=(sep>=0?payload.slice(0,sep):'').replace(/\\\\n/g,'\\n');
+      const src=sep>=0?payload.slice(sep+2):'';
+      ns.push({id,type:'image',x,y,src,comment,width,naturalW:0,naturalH:0});
+    } else if(line.startsWith('EDGE ')){
+      const p=line.split(' ');es.push({from:+p[1],to:+p[2]});
+    } else if(line.startsWith('META ')){
+      const mo=line.match(/nodeId=(\\d+)/);if(mo)nid=+mo[1];
+    } else if(line.startsWith('COLLAPSED ')){
+      const ids=line.slice(10).split(',').map(Number).filter(Boolean);
+      ns._collapsed=ids;
+    }
+  }
+  return {nodes:ns,edges:es,nodeId:nid};
+}
+
+const result=deserialize(RAW);
+let nodes=result.nodes;
+const edges=result.edges;
+const collapsed=new Set(result.nodes._collapsed||[]);
+delete result.nodes._collapsed;
+
+let panX=0,panY=0,scale=1,isPanning=false,panStart={x:0,y:0};
+const canvas=document.getElementById('canvas');
+const svgEl=document.getElementById('svg-layer');
+const nodesLayer=document.getElementById('nodes-layer');
+
+function hasChildren(id){return edges.some(e=>e.from===id);}
+function hasCollapsedAncestor(id,visited){
+  for(const e of edges){
+    if(e.to===id){
+      const pid=e.from;if(visited.has(pid))continue;visited.add(pid);
+      if(collapsed.has(pid))return true;
+      if(hasCollapsedAncestor(pid,visited))return true;
+    }
+  }
+  return false;
+}
+function isVisible(id){return!hasCollapsedAncestor(id,new Set());}
+function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function renderAll(){
+  nodes.forEach(n=>{
+    let el=document.getElementById('node-'+n.id);
+    if(!el){
+      el=document.createElement('div');
+      el.id='node-'+n.id;
+      el.className=n.type==='image'?'img-node-el':'node-el';
+      nodesLayer.appendChild(el);
+      if(n.type==='text'){
+        el.addEventListener('click',e=>{
+          e.stopPropagation();
+          if(!hasChildren(n.id))return;
+          if(collapsed.has(n.id))collapsed.delete(n.id);else collapsed.add(n.id);
+          renderAll();
+        });
+      }
+    }
+    const vis=isVisible(n.id);
+    el.classList.toggle('hidden',!vis);
+    if(!vis)return;
+    const sx=n.x*scale+panX,sy=n.y*scale+panY;
+    el.style.left=sx+'px';el.style.top=sy+'px';
+    el.style.transform='translate(-50%,-50%) scale('+scale+')';
+    if(n.type==='text'){
+      const c=getColors()[n.colorIdx];
+      const hc=hasChildren(n.id),isColl=collapsed.has(n.id);
+      const multi=n.text.includes('\\n');
+      const ws=multi?'white-space:pre;text-align:left':'white-space:nowrap;text-align:center';
+      el.innerHTML='<div class="node-box'+(n.isRoot?' root':'')+(hc?' has-children':'')+(isColl?' collapsed':'')+'" style="background:'+c.bg+';border-color:'+c.border+';color:'+c.text+';'+ws+'">'+escHtml(n.text).replace(/\\n/g,'<br>')+'</div>';
+    } else {
+      const w=n.width||180;
+      const capText=n.comment?escHtml(n.comment):'<span style="color:var(--color-text-tertiary);font-style:italic">コメントなし</span>';
+      el.innerHTML='<div class="img-node-wrap" style="width:'+w+'px"><img src="'+n.src+'" draggable="false" style="width:'+w+'px;height:'+Math.round(w*2/3)+'px;object-fit:contain"><div class="img-node-caption">'+capText+'</div></div>';
+      if(n.naturalW&&n.naturalH){
+        const dh=Math.round(w*n.naturalH/n.naturalW);
+        el.querySelector('img').style.height=dh+'px';
+      } else {
+        const tmp=new Image();
+        tmp.onload=()=>{n.naturalW=tmp.naturalWidth;n.naturalH=tmp.naturalHeight;renderAll();};
+        tmp.src=n.src;
+      }
+    }
+  });
+  renderEdges();
+}
+
+function renderEdges(){
+  svgEl.querySelectorAll('.edge').forEach(p=>p.remove());
+  edges.forEach(e=>{
+    const a=nodes.find(n=>n.id===e.from),b=nodes.find(n=>n.id===e.to);
+    if(!a||!b||!isVisible(a.id)||!isVisible(b.id))return;
+    const ax=a.x*scale+panX,ay=a.y*scale+panY,bx=b.x*scale+panX,by=b.y*scale+panY;
+    const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('d','M'+ax+' '+ay+' Q'+((ax+bx)/2)+' '+ay+' '+bx+' '+by);
+    path.setAttribute('fill','none');path.setAttribute('stroke','var(--color-border-secondary)');
+    path.setAttribute('stroke-width','1.5');path.setAttribute('class','edge');
+    path.setAttribute('marker-end','url(#arr)');
+    svgEl.appendChild(path);
+  });
+}
+
+canvas.addEventListener('mousedown',e=>{
+  if(e.button!==0||e.target.closest('.node-el')||e.target.closest('.img-node-el'))return;
+  isPanning=true;canvas.classList.add('grabbing');
+  panStart={x:e.clientX-panX,y:e.clientY-panY};
+});
+canvas.addEventListener('mousemove',e=>{if(isPanning){panX=e.clientX-panStart.x;panY=e.clientY-panStart.y;renderAll();}});
+canvas.addEventListener('mouseup',()=>{isPanning=false;canvas.classList.remove('grabbing');});
+canvas.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const rect=canvas.getBoundingClientRect();
+  const mx=e.clientX-rect.left,my=e.clientY-rect.top;
+  const z=e.deltaY<0?1.1:1/1.1;
+  const ns=Math.min(4,Math.max(0.2,scale*z));
+  panX=mx-(mx-panX)*(ns/scale);panY=my-(my-panY)*(ns/scale);scale=ns;renderAll();
+},{passive:false});
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+
+// Search
+let sResults=[],sIdx=0;
+function doSearch(q){
+  sResults=nodes.filter(n=>isVisible(n.id)&&(n.text||'').toLowerCase().includes(q.toLowerCase())
+    ||(n.comment||'').toLowerCase().includes(q.toLowerCase())).map(n=>n.id);
+  sIdx=0;updateSearchUI();if(sResults.length>0)centerOn(sResults[0],false);renderAll();applySHL();
+}
+function applySHL(){
+  const q=document.getElementById('search-input')?document.getElementById('search-input').value.trim():'';
+  if(!q||!sResults.length)return;
+  sResults.forEach((id,i)=>{
+    const el=document.getElementById('node-'+id);if(!el)return;
+    const box=el.querySelector('.node-box,.img-node-wrap');if(!box)return;
+    box.classList.add(i===sIdx?'search-current':'search-hit');
+  });
+}
+function updateSearchUI(){
+  const hasQ=document.getElementById('search-input').value.trim().length>0;
+  document.getElementById('search-prev').disabled=sResults.length===0;
+  document.getElementById('search-next').disabled=sResults.length===0;
+  document.getElementById('search-count').textContent=hasQ?(sResults.length>0?(sIdx+1)+'/'+sResults.length:'0件'):'';
+}
+function centerOn(id,andRender=true){
+  const n=nodes.find(nd=>nd.id===id);if(!n)return;
+  const rect=canvas.getBoundingClientRect();
+  panX=rect.width/2-n.x*scale;panY=rect.height/2-n.y*scale;
+  if(andRender){renderAll();applySHL();}
+}
+document.getElementById('search-input').addEventListener('input',function(){
+  const q=this.value.trim();
+  if(!q){sResults=[];sIdx=0;updateSearchUI();renderAll();return;}doSearch(q);
+});
+document.getElementById('search-input').addEventListener('keydown',function(e){
+  if(e.key==='Enter'){e.preventDefault();if(!sResults.length)return;sIdx=(sIdx+1)%sResults.length;centerOn(sResults[sIdx]);updateSearchUI();}
+  if(e.key==='Escape'){this.value='';sResults=[];sIdx=0;updateSearchUI();renderAll();this.blur();}
+});
+document.getElementById('search-next').addEventListener('click',()=>{if(!sResults.length)return;sIdx=(sIdx+1)%sResults.length;centerOn(sResults[sIdx]);updateSearchUI();});
+document.getElementById('search-prev').addEventListener('click',()=>{if(!sResults.length)return;sIdx=(sIdx-1+sResults.length)%sResults.length;centerOn(sResults[sIdx]);updateSearchUI();});
+document.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT')return;
+  if((e.ctrlKey||e.metaKey)&&e.key==='f'){e.preventDefault();document.getElementById('search-input').focus();}
+  if(e.shiftKey&&e.key==='Q'){sResults=[];sIdx=0;collapsed.clear();renderAll();}
+  if(e.shiftKey&&e.key==='W'){nodes.forEach(n=>{if(hasChildren(n.id))collapsed.add(n.id);});renderAll();}
+});
+
+// Theme
+(function(){
+  const saved=localStorage.getItem('mindmap-theme');
+  const prefersDark=window.matchMedia('(prefers-color-scheme: dark)').matches;
+  if(saved==='dark'||(saved===null&&${isDarkNow?'true':'prefersDark'})){document.body.classList.add('dark');}
+  function updateBtn(){const d=document.body.classList.contains('dark');document.getElementById('theme-icon').className=d?'ti ti-sun':'ti ti-moon';document.getElementById('theme-label').textContent=d?'ライト':'ダーク';}
+  updateBtn();
+  document.getElementById('btn-theme').addEventListener('click',()=>{document.body.classList.toggle('dark');localStorage.setItem('mindmap-theme',document.body.classList.contains('dark')?'dark':'light');updateBtn();renderAll();});
+})();
+
+// Init
+renderAll();
+`;
+
+  const html=`<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🗺 ${escHtmlStr(title)}</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --font-sans:system-ui,-apple-system,sans-serif;
+  --color-background-primary:#ffffff;--color-background-secondary:#f5f5f3;
+  --color-text-primary:#1a1a19;--color-text-secondary:#6b6a64;--color-text-tertiary:#9c9a92;
+  --color-border-tertiary:rgba(0,0,0,.12);--color-border-secondary:rgba(0,0,0,.22);
+  --color-border-primary:rgba(0,0,0,.32);--color-text-info:#0c447c;
+  --border-radius-md:8px;--border-radius-lg:12px;
+}
+body.dark{
+  --color-background-primary:#1e1e1c;--color-background-secondary:#2a2a28;
+  --color-text-primary:#e8e6de;--color-text-secondary:#a8a69e;--color-text-tertiary:#6e6c66;
+  --color-border-tertiary:rgba(255,255,255,.1);--color-border-secondary:rgba(255,255,255,.18);
+  --color-border-primary:rgba(255,255,255,.28);--color-text-info:#85b7eb;
+}
+html,body{height:100%;background:var(--color-background-secondary);color:var(--color-text-primary);font-family:var(--font-sans)}
+#app{display:flex;flex-direction:column;height:100vh}
+#header{padding:10px 16px;background:var(--color-background-primary);border-bottom:0.5px solid var(--color-border-tertiary);display:flex;align-items:center;gap:10px}
+#header h1{font-size:15px;font-weight:600;flex:1}
+#canvas{flex:1;position:relative;overflow:hidden;cursor:grab;user-select:none}
+#canvas.grabbing{cursor:grabbing}
+svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+.node-el{position:absolute;transform:translate(-50%,-50%);cursor:pointer;z-index:10}
+.img-node-el{position:absolute;transform:translate(-50%,-50%);z-index:10}
+.node-box{border-radius:20px;padding:8px 16px;font-size:13px;font-weight:500;border:1.5px solid;min-width:80px;display:inline-block}
+.node-box.root{font-size:15px;font-weight:600;padding:12px 22px;border-radius:24px}
+.node-box.has-children{cursor:pointer}
+.node-box.has-children::after{content:'▶';font-size:9px;margin-left:6px;opacity:.5}
+.node-box.has-children.collapsed::after{content:'▶▶'}
+.node-el.hidden,.img-node-el.hidden{display:none!important}
+.img-node-wrap{border-radius:12px;border:1.5px solid var(--color-border-secondary);background:var(--color-background-primary);display:inline-block;overflow:visible}
+.img-node-wrap img{display:block;border-radius:12px 12px 0 0}
+.img-node-caption{padding:6px 10px;font-size:11px;color:var(--color-text-secondary);border-top:0.5px solid var(--color-border-tertiary);border-radius:0 0 12px 12px;background:var(--color-background-primary);word-break:break-all;white-space:pre-wrap;border:1.5px solid var(--color-border-secondary);border-top:none}
+.search-hit{outline:2.5px solid #f5a623!important;outline-offset:3px}
+.search-current{outline:3px solid #e8430a!important;outline-offset:3px}
+#toolbar{display:flex;align-items:center;gap:6px;padding:8px 12px;background:var(--color-background-primary);border-top:0.5px solid var(--color-border-tertiary)}
+button{font-family:var(--font-sans);font-size:12px;padding:5px 10px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-primary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:4px}
+button:hover{background:var(--color-background-secondary)}
+button:disabled{opacity:.35;cursor:not-allowed}
+.sep{width:0.5px;height:20px;background:var(--color-border-tertiary);margin:0 2px}
+#search-input{font-size:12px;padding:4px 8px 4px 24px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);outline:none;width:140px;font-family:var(--font-sans)}
+#hint{font-size:11px;color:var(--color-text-tertiary);margin-left:auto}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="header">
+    <h1>🗺 ${escHtmlStr(title)}</h1>
+    <span style="font-size:11px;color:var(--color-text-tertiary)">クリック: 展開/折り畳み | ホイール: ズーム | ドラッグ: 移動 | Shift+Q: 全展開 | Shift+W: 全折り畳み</span>
+    <button id="btn-theme" style="margin-left:8px;padding:4px 10px"><i id="theme-icon" class="ti ti-moon"></i> <span id="theme-label">ダーク</span></button>
+  </div>
+  <div id="canvas">
+    <svg id="svg-layer">
+      <defs>
+        <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+    </svg>
+    <div id="nodes-layer"></div>
+  </div>
+  <div id="toolbar">
+    <div style="position:relative;display:flex;align-items:center">
+      <i class="ti ti-search" style="position:absolute;left:7px;font-size:12px;color:var(--color-text-tertiary);pointer-events:none"></i>
+      <input id="search-input" type="text" placeholder="検索..." autocomplete="off">
+    </div>
+    <button id="search-prev" disabled><i class="ti ti-chevron-up"></i></button>
+    <button id="search-next" disabled><i class="ti ti-chevron-down"></i></button>
+    <span id="search-count" style="font-size:11px;color:var(--color-text-tertiary);white-space:nowrap;min-width:40px"></span>
+    <span id="hint">🔒 閲覧専用</span>
+  </div>
+</div>
+<script>
+${publicScript}
+<\/script>
+</body>
+</html>`;
+  return html;
+}
+
+function escHtmlStr(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+function downloadPublicHtml(){
+  const html=generatePublicHtml();
+  const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  const base=(document.getElementById('save-filename').value.trim()||'mindmap');
+  const fname=base+'_public.html';
+  a.href=url;a.download=fname;
+  document.body.appendChild(a);a.click();
+  document.body.removeChild(a);URL.revokeObjectURL(url);
+  return fname;
+}
+
+document.getElementById('modal-save-public-btn').addEventListener('click',()=>{
+  const fname=downloadPublicHtml();
+  showModalStatus('✓ '+fname+' を保存しました',false);
+});
+
 // Save/Download button
-document.getElementById('modal-save-btn').addEventListener('click',()=>{
+function downloadSave(){
   const data=serialize();
   const blob=new Blob([data],{type:'text/plain;charset=utf-8'});
   const url=URL.createObjectURL(blob);
@@ -1230,6 +1561,10 @@ document.getElementById('modal-save-btn').addEventListener('click',()=>{
   a.href=url;a.download=fname;
   document.body.appendChild(a);a.click();
   document.body.removeChild(a);URL.revokeObjectURL(url);
+  return fname;
+}
+document.getElementById('modal-save-btn').addEventListener('click',()=>{
+  const fname=downloadSave();
   showModalStatus('✓ '+fname+' を保存しました',false);
 });
 
