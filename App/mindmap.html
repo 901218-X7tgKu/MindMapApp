@@ -970,6 +970,7 @@ canvas.addEventListener('mousemove',e=>{
 
 document.addEventListener('keydown',e=>{
   if(e.target.tagName==='TEXTAREA'||e.target.tagName==='INPUT')return;
+  if(e.target.isContentEditable)return;
   if((e.ctrlKey||e.metaKey)&&e.key==='z'){e.preventDefault();undo();}
   if((e.ctrlKey||e.metaKey)&&(e.key==='y'||(e.shiftKey&&e.key==='z'))){e.preventDefault();redo();}
   if(e.shiftKey&&e.key==='Q'){e.preventDefault();expandAll();}
