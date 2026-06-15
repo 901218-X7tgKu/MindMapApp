@@ -71,6 +71,21 @@ svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
 .img-node-caption.empty{color:var(--color-text-tertiary);font-style:italic}
 .img-node-caption input,.img-node-caption textarea{width:100%;background:none;border:none;outline:none;font-size:11px;color:var(--color-text-primary);font-family:inherit;resize:none;padding:0}
 
+/* Hover highlight */
+.node-box.hover-self,.img-node-wrap.hover-self{
+  outline:2.5px solid #f5a100;outline-offset:3px;
+  box-shadow:0 0 0 4px rgba(245,161,0,.15);
+}
+.node-box.hover-parent,.img-node-wrap.hover-parent{
+  outline:2.5px solid #2196f3;outline-offset:3px;
+  box-shadow:0 0 0 4px rgba(33,150,243,.15);
+}
+.node-box.hover-child,.img-node-wrap.hover-child{
+  outline:2.5px solid #4caf50;outline-offset:3px;
+  box-shadow:0 0 0 4px rgba(76,175,80,.15);
+}
+.edge.hover-edge{stroke:#f5a100!important;stroke-width:2.5!important;opacity:1!important;}
+
 /* Drop hint */
 #drop-hint{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;text-align:center;color:var(--color-text-tertiary);font-size:13px;opacity:0;transition:opacity .2s}
 #canvas.dragover #drop-hint{opacity:1}
@@ -127,7 +142,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+右クリック×2: 接続 | ホイール: ズーム | Shift+ドラッグ: 全体移動</span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.36</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.37</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -291,6 +306,7 @@ let scale=1;                                  // zoom
 let shiftPanning=false, shiftPanStart={x:0,y:0};  // shift+left-click pan-all
 let collapsedNodes=new Set();                 // ids of collapsed parents
 let ctrlDragging=false;                       // ctrl+drag moves children too
+let hoveredNodeId=null;                       // node currently hovered
 let nodeId=0;
 let history=[], historyIdx=-1, _skipHistory=false;
 
@@ -427,6 +443,8 @@ function createNodeEl(n){
   el.addEventListener('mousedown',e=>onNodeMouseDown(e,n));
   el.addEventListener('click',e=>onNodeClick(e,n));
   el.addEventListener('contextmenu',e=>onNodeRightClick(e,n));
+  el.addEventListener('mouseenter',()=>{hoveredNodeId=n.id;applyHoverHighlight();});
+  el.addEventListener('mouseleave',()=>{hoveredNodeId=null;applyHoverHighlight();});
 }
 function renderTextNode(n){
   let el=document.getElementById('node-'+n.id);
@@ -460,6 +478,8 @@ function createImgNodeEl(n){
   el.addEventListener('mousedown',e=>onNodeMouseDown(e,n));
   el.addEventListener('click',e=>onNodeClick(e,n));
   el.addEventListener('contextmenu',e=>onImgNodeRightClick(e,n));
+  el.addEventListener('mouseenter',()=>{hoveredNodeId=n.id;applyHoverHighlight();});
+  el.addEventListener('mouseleave',()=>{hoveredNodeId=null;applyHoverHighlight();});
 }
 function renderImgNode(n){
   let el=document.getElementById('node-'+n.id);
@@ -509,7 +529,7 @@ function renderImgNode(n){
 function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
 function renderNode(n){if(n.type==='image')renderImgNode(n);else renderTextNode(n);}
-function renderAll(){nodes.forEach(renderNode);renderEdges();}
+function renderAll(){nodes.forEach(renderNode);renderEdges();applyHoverHighlight();}
 function renderEdges(){
   svgEl.querySelectorAll('.edge').forEach(p=>p.remove());
   edges.forEach(e=>{
@@ -524,10 +544,49 @@ function renderEdges(){
     path.setAttribute('stroke','var(--color-border-secondary)');
     path.setAttribute('stroke-width','1.5');
     path.setAttribute('class','edge');
+    path.dataset.from = String(e.from);
+    path.dataset.to   = String(e.to);
     path.setAttribute('marker-end','url(#arr)');
     svgEl.appendChild(path);
   });
 }
+function applyHoverHighlight(){
+  // Clear all hover classes
+  document.querySelectorAll('.hover-self,.hover-parent,.hover-child').forEach(el=>{
+    el.classList.remove('hover-self','hover-parent','hover-child');
+  });
+  document.querySelectorAll('.edge.hover-edge').forEach(e=>e.classList.remove('hover-edge'));
+  if(hoveredNodeId===null)return;
+
+  const selfIds=new Set([hoveredNodeId]);
+  const parentIds=new Set(edges.filter(e=>e.to===hoveredNodeId).map(e=>e.from));
+  const childIds=new Set(edges.filter(e=>e.from===hoveredNodeId).map(e=>e.to));
+
+  const applyClass=(nodeId, cls)=>{
+    const el=document.getElementById('node-'+nodeId);
+    if(!el)return;
+    const box=el.querySelector('.node-box,.img-node-wrap');
+    if(box)box.classList.add(cls);
+  };
+  selfIds.forEach(id=>applyClass(id,'hover-self'));
+  parentIds.forEach(id=>applyClass(id,'hover-parent'));
+  childIds.forEach(id=>applyClass(id,'hover-child'));
+
+  // Highlight connected edges
+  svgEl.querySelectorAll('.edge').forEach(path=>{
+    // Edges store no metadata — re-scan edges array vs SVG paths by position
+  });
+  // Highlight edges by re-coloring paths that connect hovered node
+  const connectedIds=new Set([...parentIds,...childIds]);
+  svgEl.querySelectorAll('.edge').forEach(path=>{
+    const from = path.dataset.from;
+    const to   = path.dataset.to;
+    if(from === String(hoveredNodeId) || to === String(hoveredNodeId)){
+        path.classList.add('hover-edge');
+    }
+  });
+}
+
 function makeTextNode(text,x,y,colorIdx=0,isRoot=false){
   const n={id:nodeId++,type:'text',text,x,y,colorIdx,isRoot};
   nodes.push(n);createNodeEl(n);renderNode(n);renderEdges();return n;
