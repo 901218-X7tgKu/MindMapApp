@@ -141,8 +141,8 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
 <div id="app">
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
-    <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+右クリック×2: 接続 | ホイール: ズーム | Shift+ドラッグ: 全体移動</span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.37</span>
+    <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+右クリック×2: 接続 | ホイール: ズーム | Shift+ドラッグ: 全体移動 | F: 選択ノードを中央へ | WASD: スクロール</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.43</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -309,6 +309,7 @@ let ctrlDragging=false;                       // ctrl+drag moves children too
 let hoveredNodeId=null;                       // node currently hovered
 let nodeId=0;
 let history=[], historyIdx=-1, _skipHistory=false;
+let _unsaved=false; // true when edits exist that have not been downloaded
 
 const canvas=document.getElementById('canvas');
 const svgEl=document.getElementById('svg-layer');
@@ -327,6 +328,7 @@ function pushHistory(){
   history.push(snapshot());
   if(history.length>60)history.shift();
   historyIdx=history.length-1;
+  _unsaved=true;
   updateUndoRedo();
 }
 function restoreSnapshot(s){
@@ -558,7 +560,6 @@ function applyHoverHighlight(){
   document.querySelectorAll('.edge.hover-edge').forEach(e=>e.classList.remove('hover-edge'));
   if(hoveredNodeId===null)return;
 
-  const selfIds=new Set([hoveredNodeId]);
   const parentIds=new Set(edges.filter(e=>e.to===hoveredNodeId).map(e=>e.from));
   const childIds=new Set(edges.filter(e=>e.from===hoveredNodeId).map(e=>e.to));
 
@@ -568,21 +569,16 @@ function applyHoverHighlight(){
     const box=el.querySelector('.node-box,.img-node-wrap');
     if(box)box.classList.add(cls);
   };
-  selfIds.forEach(id=>applyClass(id,'hover-self'));
+  applyClass(hoveredNodeId,'hover-self');
   parentIds.forEach(id=>applyClass(id,'hover-parent'));
   childIds.forEach(id=>applyClass(id,'hover-child'));
 
-  // Highlight connected edges
+  // Highlight edges connected to hovered node using data attributes
   svgEl.querySelectorAll('.edge').forEach(path=>{
-    // Edges store no metadata — re-scan edges array vs SVG paths by position
-  });
-  // Highlight edges by re-coloring paths that connect hovered node
-  const connectedIds=new Set([...parentIds,...childIds]);
-  svgEl.querySelectorAll('.edge').forEach(path=>{
-    const from = path.dataset.from;
-    const to   = path.dataset.to;
-    if(from === String(hoveredNodeId) || to === String(hoveredNodeId)){
-        path.classList.add('hover-edge');
+    const from=path.dataset.from;
+    const to=path.dataset.to;
+    if(from===String(hoveredNodeId)||to===String(hoveredNodeId)){
+      path.classList.add('hover-edge');
     }
   });
 }
@@ -1038,6 +1034,22 @@ document.addEventListener('keydown',e=>{
   if(e.shiftKey&&e.key==='D'){e.preventDefault();const f=downloadSave();showToast('✓ '+f+' を保存しました');}
   if(e.shiftKey&&e.key==='P'){e.preventDefault();const f=downloadPublicHtml();showToast('✓ '+f+' を保存しました');}
 
+  // F: center on selected node
+  if(e.key==='f'&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey){
+    if(selected!==null){e.preventDefault();centerOnNode(selected);showToast('📍 ノードを中央に表示しました');}
+  }
+
+  // WASD: pan canvas (75% of viewport width/height per press)
+  if(!e.ctrlKey&&!e.metaKey&&!e.shiftKey){
+    const rect=canvas.getBoundingClientRect();
+    const stepX=rect.width*0.75;
+    const stepY=rect.height*0.75;
+    if(e.key==='a'){e.preventDefault();panX+=stepX;renderAll();}
+    if(e.key==='d'){e.preventDefault();panX-=stepX;renderAll();}
+    if(e.key==='w'){e.preventDefault();panY+=stepY;renderAll();}
+    if(e.key==='s'){e.preventDefault();panY-=stepY;renderAll();}
+  }
+
   // Ctrl+C: copy selected node
   if((e.ctrlKey||e.metaKey)&&e.key==='c'&&!e.shiftKey){
     if(selected===null)return;
@@ -1322,6 +1334,7 @@ function getColors(){return document.body.classList.contains('dark')?COLORS_D:CO
 
 const RAW=${JSON.stringify(mapData)};
 
+let hoveredNodeId=null;
 
 function deserialize(text){
   const lines=text.trim().split('\\n');
@@ -1375,6 +1388,27 @@ function hasCollapsedAncestor(id,visited){
 function isVisible(id){return!hasCollapsedAncestor(id,new Set());}
 function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
+function applyHoverHighlight(){
+  document.querySelectorAll('.hover-self,.hover-parent,.hover-child').forEach(el=>{
+    el.classList.remove('hover-self','hover-parent','hover-child');
+  });
+  document.querySelectorAll('.edge.hover-edge').forEach(e=>e.classList.remove('hover-edge'));
+  if(hoveredNodeId===null)return;
+  const parentIds=new Set(edges.filter(e=>e.to===hoveredNodeId).map(e=>e.from));
+  const childIds=new Set(edges.filter(e=>e.from===hoveredNodeId).map(e=>e.to));
+  const applyClass=(nodeId, cls)=>{
+    const el=document.getElementById('node-'+nodeId);if(!el)return;
+    const box=el.querySelector('.node-box,.img-node-wrap');if(box)box.classList.add(cls);
+  };
+  applyClass(hoveredNodeId,'hover-self');
+  parentIds.forEach(id=>applyClass(id,'hover-parent'));
+  childIds.forEach(id=>applyClass(id,'hover-child'));
+  svgEl.querySelectorAll('.edge').forEach(path=>{
+    const from=path.dataset.from;const to=path.dataset.to;
+    if(from===String(hoveredNodeId)||to===String(hoveredNodeId)){path.classList.add('hover-edge');}
+  });
+}
+
 function renderAll(){
   nodes.forEach(n=>{
     let el=document.getElementById('node-'+n.id);
@@ -1395,12 +1429,16 @@ function renderAll(){
           const t=(n.text||'').trim();
           if(t)window.open(t,'_blank','noopener,noreferrer');
         });
+        el.addEventListener('mouseenter',()=>{hoveredNodeId=n.id;applyHoverHighlight();});
+        el.addEventListener('mouseleave',()=>{hoveredNodeId=null;applyHoverHighlight();});
       } else {
         el.addEventListener('contextmenu',e=>{
           e.preventDefault();e.stopPropagation();
           const t=(n.comment||'').trim();
           if(t)window.open(t,'_blank','noopener,noreferrer');
         });
+        el.addEventListener('mouseenter',()=>{hoveredNodeId=n.id;applyHoverHighlight();});
+        el.addEventListener('mouseleave',()=>{hoveredNodeId=null;applyHoverHighlight();});
       }
     }
     const vis=isVisible(n.id);
@@ -1429,7 +1467,7 @@ function renderAll(){
       }
     }
   });
-  renderEdges();
+  renderEdges();applyHoverHighlight();
 }
 
 function renderEdges(){
@@ -1442,6 +1480,7 @@ function renderEdges(){
     path.setAttribute('d','M'+ax+' '+ay+' Q'+((ax+bx)/2)+' '+ay+' '+bx+' '+by);
     path.setAttribute('fill','none');path.setAttribute('stroke','var(--color-border-secondary)');
     path.setAttribute('stroke-width','1.5');path.setAttribute('class','edge');
+    path.dataset.from=String(e.from);path.dataset.to=String(e.to);
     path.setAttribute('marker-end','url(#arr)');
     svgEl.appendChild(path);
   });
@@ -1507,6 +1546,14 @@ document.addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&e.key==='f'){e.preventDefault();document.getElementById('search-input').focus();}
   if(e.shiftKey&&e.key==='Q'){sResults=[];sIdx=0;collapsed.clear();renderAll();}
   if(e.shiftKey&&e.key==='W'){nodes.forEach(n=>{if(hasChildren(n.id))collapsed.add(n.id);});renderAll();}
+  if(!e.ctrlKey&&!e.metaKey&&!e.shiftKey){
+    const rect=canvas.getBoundingClientRect();
+    const stepX=rect.width*0.75;const stepY=rect.height*0.75;
+    if(e.key==='a'){e.preventDefault();panX+=stepX;renderAll();}
+    if(e.key==='d'){e.preventDefault();panX-=stepX;renderAll();}
+    if(e.key==='w'){e.preventDefault();panY+=stepY;renderAll();}
+    if(e.key==='s'){e.preventDefault();panY-=stepY;renderAll();}
+  }
 });
 
 // Theme
@@ -1566,6 +1613,10 @@ svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
 .img-node-caption{padding:6px 10px;font-size:11px;color:var(--color-text-secondary);border-top:0.5px solid var(--color-border-tertiary);border-radius:0 0 12px 12px;background:var(--color-background-primary);word-break:break-all;white-space:pre-wrap;border:1.5px solid var(--color-border-secondary);border-top:none}
 .search-hit{outline:2.5px solid #f5a623!important;outline-offset:3px}
 .search-current{outline:3px solid #e8430a!important;outline-offset:3px}
+.node-box.hover-self,.img-node-wrap.hover-self{outline:2.5px solid #f5a100;outline-offset:3px;box-shadow:0 0 0 4px rgba(245,161,0,.15);}
+.node-box.hover-parent,.img-node-wrap.hover-parent{outline:2.5px solid #2196f3;outline-offset:3px;box-shadow:0 0 0 4px rgba(33,150,243,.15);}
+.node-box.hover-child,.img-node-wrap.hover-child{outline:2.5px solid #4caf50;outline-offset:3px;box-shadow:0 0 0 4px rgba(76,175,80,.15);}
+.edge.hover-edge{stroke:#f5a100!important;stroke-width:2.5!important;opacity:1!important;}
 #toolbar{display:flex;align-items:center;gap:6px;padding:8px 12px;background:var(--color-background-primary);border-top:0.5px solid var(--color-border-tertiary)}
 button{font-family:var(--font-sans);font-size:12px;padding:5px 10px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-primary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:4px}
 button:hover{background:var(--color-background-secondary)}
@@ -1610,7 +1661,6 @@ ${publicScript}
 </html>`;
   return html;
 }
-
 function escHtmlStr(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
 function downloadPublicHtml(){
@@ -1641,6 +1691,7 @@ function downloadSave(){
   a.href=url;a.download=fname;
   document.body.appendChild(a);a.click();
   document.body.removeChild(a);URL.revokeObjectURL(url);
+  _unsaved=false;
   return fname;
 }
 document.getElementById('modal-save-btn').addEventListener('click',()=>{
@@ -1651,6 +1702,13 @@ document.getElementById('modal-save-btn').addEventListener('click',()=>{
 document.getElementById('modal-close').addEventListener('click',()=>saveModal.classList.remove('show'));
 saveModal.addEventListener('click',e=>{if(e.target===saveModal)saveModal.classList.remove('show');});
 
+
+// ── Unsaved changes warning ───────────────────────────────
+window.addEventListener('beforeunload',e=>{
+  if(!_unsaved)return;
+  e.preventDefault();
+  e.returnValue=''; // required for Chrome to show the dialog
+});
 
 // ── Theme toggle ─────────────────────────────────────────
 (function(){
