@@ -141,8 +141,8 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
 <div id="app">
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
-    <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+右クリック×2: 接続 | ホイール: ズーム | Shift+ドラッグ: 全体移動 | F: 選択ノードを中央へ | WASD: スクロール</span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.44</span>
+    <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+右クリック×2: 接続 | ホイール: ズーム | Shift+ドラッグ: 全体移動 | F: 選択ノードを中央へ | WASD: スクロール | Ctrl+Shift+L: 子孫含めて削除</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.46</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -652,6 +652,33 @@ function deleteNode(n){
   if(selected===n.id)selected=null;
   pushHistory();renderEdges();
 }
+function getAllDescendantIds(rootId){
+  const result=new Set();
+  const queue=[rootId];
+  while(queue.length){
+    const id=queue.shift();
+    edges.forEach(e=>{
+      if(e.from===id&&!result.has(e.to)){
+        result.add(e.to);
+        queue.push(e.to);
+      }
+    });
+  }
+  return result;
+}
+function deleteNodeWithDescendants(n){
+  const descendantIds=getAllDescendantIds(n.id);
+  const idsToDelete=new Set(descendantIds);
+  idsToDelete.add(n.id);
+  nodes=nodes.filter(nd=>!idsToDelete.has(nd.id));
+  edges=edges.filter(ed=>!idsToDelete.has(ed.from)&&!idsToDelete.has(ed.to));
+  idsToDelete.forEach(id=>{
+    collapsedNodes.delete(id);
+    const el=document.getElementById('node-'+id);if(el)el.remove();
+  });
+  if(idsToDelete.has(selected))selected=null;
+  pushHistory();renderEdges();
+}
 function startInlineEdit(n){
   if(editingNodeId===n.id)return;
   editingNodeId=n.id;
@@ -1050,6 +1077,23 @@ document.addEventListener('keydown',e=>{
     if(e.key==='s'){e.preventDefault();panY-=stepY;renderAll();}
   }
 
+  // Ctrl+Shift+L: delete selected node and all descendants (with confirmation)
+  if((e.ctrlKey||e.metaKey)&&e.shiftKey&&e.key.toLowerCase()==='l'){
+    e.preventDefault();
+    if(selected===null)return;
+    const n=nodes.find(nd=>nd.id===selected);
+    if(!n)return;
+    const descendantCount=getAllDescendantIds(n.id).size;
+    const msg=descendantCount>0
+      ? `このノードと子ノード ${descendantCount} 個（計 ${descendantCount+1} 個）を削除します。よろしいですか？`
+      : 'このノードを削除します。よろしいですか？';
+    if(window.confirm(msg)){
+      deleteNodeWithDescendants(n);
+      showToast('✓ ノードと子ノードを削除しました');
+    }
+    return;
+  }
+
   // Ctrl+C: copy selected node
   if((e.ctrlKey||e.metaKey)&&e.key==='c'&&!e.shiftKey){
     if(selected===null)return;
@@ -1282,6 +1326,10 @@ function loadMap(data, mode, successMsg){
   }
   result.nodes.forEach(n=>{if(n.type==='image')createImgNodeEl(n);else createNodeEl(n);});
   renderAll();pushHistory();
+  if(mode==='overwrite'&&nodes.length>0){
+    const youngest=nodes.reduce((min,n)=>n.id<min.id?n:min,nodes[0]);
+    centerOnNode(youngest.id);
+  }
   if(successMsg)showToast(successMsg);
   return true;
 }
@@ -1567,6 +1615,10 @@ document.addEventListener('keydown',e=>{
 })();
 
 // Init
+if(nodes.length>0){
+  const youngest=nodes.reduce((min,n)=>n.id<min.id?n:min,nodes[0]);
+  centerOn(youngest.id,false);
+}
 renderAll();
 `;
 
@@ -1765,6 +1817,10 @@ const n5=makeTextNode('詳細1',cx-260,cy-210,1);
 const n6=makeTextNode('詳細2',cx-90,cy-210,1);
 edges.push({from:root.id,to:n1.id},{from:root.id,to:n2.id},{from:root.id,to:n3.id},{from:root.id,to:n4.id},{from:n1.id,to:n5.id},{from:n1.id,to:n6.id});
 renderEdges();pushHistory();
+{
+  const youngest=nodes.reduce((min,n)=>n.id<min.id?n:min,nodes[0]);
+  centerOnNode(youngest.id);
+}
 </script>
 </body>
 </html>
