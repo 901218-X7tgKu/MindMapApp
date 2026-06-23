@@ -141,8 +141,8 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
 <div id="app">
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
-    <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+右クリック×2: 接続 | ホイール: ズーム | Shift+ドラッグ: 全体移動 | F: 選択ノードを中央へ | WASD: スクロール | Ctrl+Shift+L: 子孫含めて削除</span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.46</span>
+    <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+右クリック×2: 接続 | ホイール: ズーム | Shift+ドラッグ: 全体移動 | F: 選択ノードを中央へ | WASD: スクロール | Ctrl+Shift+L: 子孫含めて削除 | Shift+N: 新規タブで開く</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.47</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -1056,6 +1056,7 @@ document.addEventListener('keydown',e=>{
   if(e.target.isContentEditable)return;
   if((e.ctrlKey||e.metaKey)&&e.key==='z'){e.preventDefault();undo();}
   if((e.ctrlKey||e.metaKey)&&(e.key==='y'||(e.shiftKey&&e.key==='z'))){e.preventDefault();redo();}
+  if(e.shiftKey&&e.key==='N'){e.preventDefault();window.open(window.location.href,'_blank');return;}
   if(e.shiftKey&&e.key==='Q'){e.preventDefault();expandAll();}
   if(e.shiftKey&&e.key==='W'){e.preventDefault();collapseAll();}
   if(e.shiftKey&&e.key==='D'){e.preventDefault();const f=downloadSave();showToast('✓ '+f+' を保存しました');}
