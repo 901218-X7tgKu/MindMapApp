@@ -142,7 +142,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+右クリック×2: 接続 | ホイール: ズーム | Shift+ドラッグ: 全体移動 | F: 選択ノードを中央へ | WASD: スクロール | Ctrl+Shift+L: 子孫含めて削除 | Shift+N: 新規タブで開く</span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.47</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.51</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -151,8 +151,11 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="canvas">
     <svg id="svg-layer">
       <defs>
-        <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
-          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="10" markerHeight="10" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+          <path d="M1 1L9 5L1 9Z" fill="var(--color-border-primary)" stroke="none"/>
+        </marker>
+        <marker id="arr-hover" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="10" markerHeight="10" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+          <path d="M1 1L9 5L1 9Z" fill="#f5a100" stroke="none"/>
         </marker>
       </defs>
     </svg>
@@ -539,15 +542,31 @@ function renderEdges(){
     if(!a||!b)return;
     if(!isNodeVisible(a.id)||!isNodeVisible(b.id))return;
     const ax=a.x*scale+panX,ay=a.y*scale+panY,bx=b.x*scale+panX,by=b.y*scale+panY;
+    // Precise offset: parametric intersection of direction vector with node bounding rect
+    let offset=10;
+    const bEl=document.getElementById('node-'+b.id);
+    if(bEl){
+      const r=bEl.getBoundingClientRect();
+      const hw=r.width/2+4, hh=r.height/2+4; // +4px clearance
+      const dx=bx-ax, dy=by-ay;
+      if(Math.abs(dx)>0.001||Math.abs(dy)>0.001){
+        const tx=hw/Math.abs(dx), ty=hh/Math.abs(dy);
+        const t=Math.min(tx,ty);
+        offset=t*Math.sqrt(dx*dx+dy*dy);
+      }
+      offset=Math.min(offset,Math.sqrt((bx-ax)**2+(by-ay)**2)*0.8);
+    }
+    const dx=bx-ax,dy=by-ay,dist=Math.sqrt(dx*dx+dy*dy)||1;
+    const ex=bx-(dx/dist)*offset, ey=by-(dy/dist)*offset;
     const path=document.createElementNS('http://www.w3.org/2000/svg','path');
-    const mx=(ax+bx)/2;
-    path.setAttribute('d',`M${ax} ${ay} Q${mx} ${ay} ${bx} ${by}`);
+    const mx=(ax+ex)/2;
+    path.setAttribute('d',`M${ax} ${ay} Q${mx} ${ay} ${ex} ${ey}`);
     path.setAttribute('fill','none');
     path.setAttribute('stroke','var(--color-border-secondary)');
     path.setAttribute('stroke-width','1.5');
     path.setAttribute('class','edge');
-    path.dataset.from = String(e.from);
-    path.dataset.to   = String(e.to);
+    path.dataset.from=String(e.from);
+    path.dataset.to=String(e.to);
     path.setAttribute('marker-end','url(#arr)');
     svgEl.appendChild(path);
   });
@@ -557,7 +576,7 @@ function applyHoverHighlight(){
   document.querySelectorAll('.hover-self,.hover-parent,.hover-child').forEach(el=>{
     el.classList.remove('hover-self','hover-parent','hover-child');
   });
-  document.querySelectorAll('.edge.hover-edge').forEach(e=>e.classList.remove('hover-edge'));
+  document.querySelectorAll('.edge.hover-edge').forEach(e=>{e.classList.remove('hover-edge');e.setAttribute('marker-end','url(#arr)');});
   if(hoveredNodeId===null)return;
 
   const parentIds=new Set(edges.filter(e=>e.to===hoveredNodeId).map(e=>e.from));
@@ -579,6 +598,7 @@ function applyHoverHighlight(){
     const to=path.dataset.to;
     if(from===String(hoveredNodeId)||to===String(hoveredNodeId)){
       path.classList.add('hover-edge');
+      path.setAttribute('marker-end','url(#arr-hover)');
     }
   });
 }
@@ -1441,7 +1461,7 @@ function applyHoverHighlight(){
   document.querySelectorAll('.hover-self,.hover-parent,.hover-child').forEach(el=>{
     el.classList.remove('hover-self','hover-parent','hover-child');
   });
-  document.querySelectorAll('.edge.hover-edge').forEach(e=>e.classList.remove('hover-edge'));
+  document.querySelectorAll('.edge.hover-edge').forEach(e=>{e.classList.remove('hover-edge');e.setAttribute('marker-end','url(#arr)');});
   if(hoveredNodeId===null)return;
   const parentIds=new Set(edges.filter(e=>e.to===hoveredNodeId).map(e=>e.from));
   const childIds=new Set(edges.filter(e=>e.from===hoveredNodeId).map(e=>e.to));
@@ -1454,7 +1474,10 @@ function applyHoverHighlight(){
   childIds.forEach(id=>applyClass(id,'hover-child'));
   svgEl.querySelectorAll('.edge').forEach(path=>{
     const from=path.dataset.from;const to=path.dataset.to;
-    if(from===String(hoveredNodeId)||to===String(hoveredNodeId)){path.classList.add('hover-edge');}
+    if(from===String(hoveredNodeId)||to===String(hoveredNodeId)){
+      path.classList.add('hover-edge');
+      path.setAttribute('marker-end','url(#arr-hover)');
+    }
   });
 }
 
@@ -1525,8 +1548,23 @@ function renderEdges(){
     const a=nodes.find(n=>n.id===e.from),b=nodes.find(n=>n.id===e.to);
     if(!a||!b||!isVisible(a.id)||!isVisible(b.id))return;
     const ax=a.x*scale+panX,ay=a.y*scale+panY,bx=b.x*scale+panX,by=b.y*scale+panY;
+    let offset=10;
+    const bEl=document.getElementById('node-'+b.id);
+    if(bEl){
+      const r=bEl.getBoundingClientRect();
+      const hw=r.width/2+4,hh=r.height/2+4;
+      const dx=bx-ax,dy=by-ay;
+      if(Math.abs(dx)>0.001||Math.abs(dy)>0.001){
+        const tx=hw/Math.abs(dx),ty=hh/Math.abs(dy);
+        const t=Math.min(tx,ty);
+        offset=t*Math.sqrt(dx*dx+dy*dy);
+      }
+      offset=Math.min(offset,Math.sqrt((bx-ax)**2+(by-ay)**2)*0.8);
+    }
+    const dx=bx-ax,dy=by-ay,dist=Math.sqrt(dx*dx+dy*dy)||1;
+    const ex=bx-(dx/dist)*offset,ey=by-(dy/dist)*offset;
     const path=document.createElementNS('http://www.w3.org/2000/svg','path');
-    path.setAttribute('d','M'+ax+' '+ay+' Q'+((ax+bx)/2)+' '+ay+' '+bx+' '+by);
+    path.setAttribute('d','M'+ax+' '+ay+' Q'+((ax+ex)/2)+' '+ay+' '+ex+' '+ey);
     path.setAttribute('fill','none');path.setAttribute('stroke','var(--color-border-secondary)');
     path.setAttribute('stroke-width','1.5');path.setAttribute('class','edge');
     path.dataset.from=String(e.from);path.dataset.to=String(e.to);
@@ -1689,8 +1727,11 @@ button:disabled{opacity:.35;cursor:not-allowed}
   <div id="canvas">
     <svg id="svg-layer">
       <defs>
-        <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
-          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="10" markerHeight="10" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+          <path d="M1 1L9 5L1 9Z" fill="var(--color-border-primary)" stroke="none"/>
+        </marker>
+        <marker id="arr-hover" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="10" markerHeight="10" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+          <path d="M1 1L9 5L1 9Z" fill="#f5a100" stroke="none"/>
         </marker>
       </defs>
     </svg>
