@@ -84,7 +84,7 @@ svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
   outline:2.5px solid #4caf50;outline-offset:3px;
   box-shadow:0 0 0 4px rgba(76,175,80,.15);
 }
-.edge.hover-edge{stroke:#f5a100!important;stroke-width:2.5!important;opacity:1!important;}
+  .edge.hover-edge{stroke:#f5a100!important;opacity:1!important;}
 
 /* Drop hint */
 #drop-hint{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;text-align:center;color:var(--color-text-tertiary);font-size:13px;opacity:0;transition:opacity .2s}
@@ -142,7 +142,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+右クリック×2: 接続 | ホイール: ズーム | Shift+ドラッグ: 全体移動 | F: 選択ノードを中央へ | WASD: スクロール | Ctrl+Shift+L: 子孫含めて削除 | Shift+N: 新規タブで開く</span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.51</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.52</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -151,10 +151,10 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="canvas">
     <svg id="svg-layer">
       <defs>
-        <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="10" markerHeight="10" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+        <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
           <path d="M1 1L9 5L1 9Z" fill="var(--color-border-primary)" stroke="none"/>
         </marker>
-        <marker id="arr-hover" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="10" markerHeight="10" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+        <marker id="arr-hover" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
           <path d="M1 1L9 5L1 9Z" fill="#f5a100" stroke="none"/>
         </marker>
       </defs>
@@ -563,7 +563,7 @@ function renderEdges(){
     path.setAttribute('d',`M${ax} ${ay} Q${mx} ${ay} ${ex} ${ey}`);
     path.setAttribute('fill','none');
     path.setAttribute('stroke','var(--color-border-secondary)');
-    path.setAttribute('stroke-width','1.5');
+    path.setAttribute('stroke-width', String(1.5 * scale));
     path.setAttribute('class','edge');
     path.dataset.from=String(e.from);
     path.dataset.to=String(e.to);
@@ -598,6 +598,7 @@ function applyHoverHighlight(){
     const to=path.dataset.to;
     if(from===String(hoveredNodeId)||to===String(hoveredNodeId)){
       path.classList.add('hover-edge');
+      path.setAttribute('stroke-width', String(2.5 * scale));
       path.setAttribute('marker-end','url(#arr-hover)');
     }
   });
@@ -1476,6 +1477,7 @@ function applyHoverHighlight(){
     const from=path.dataset.from;const to=path.dataset.to;
     if(from===String(hoveredNodeId)||to===String(hoveredNodeId)){
       path.classList.add('hover-edge');
+      path.setAttribute('stroke-width',String(2.5*scale));
       path.setAttribute('marker-end','url(#arr-hover)');
     }
   });
@@ -1566,7 +1568,7 @@ function renderEdges(){
     const path=document.createElementNS('http://www.w3.org/2000/svg','path');
     path.setAttribute('d','M'+ax+' '+ay+' Q'+((ax+ex)/2)+' '+ay+' '+ex+' '+ey);
     path.setAttribute('fill','none');path.setAttribute('stroke','var(--color-border-secondary)');
-    path.setAttribute('stroke-width','1.5');path.setAttribute('class','edge');
+    path.setAttribute('stroke-width',String(1.5*scale));path.setAttribute('class','edge');
     path.dataset.from=String(e.from);path.dataset.to=String(e.to);
     path.setAttribute('marker-end','url(#arr)');
     svgEl.appendChild(path);
@@ -1707,7 +1709,7 @@ svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
 .node-box.hover-self,.img-node-wrap.hover-self{outline:2.5px solid #f5a100;outline-offset:3px;box-shadow:0 0 0 4px rgba(245,161,0,.15);}
 .node-box.hover-parent,.img-node-wrap.hover-parent{outline:2.5px solid #2196f3;outline-offset:3px;box-shadow:0 0 0 4px rgba(33,150,243,.15);}
 .node-box.hover-child,.img-node-wrap.hover-child{outline:2.5px solid #4caf50;outline-offset:3px;box-shadow:0 0 0 4px rgba(76,175,80,.15);}
-.edge.hover-edge{stroke:#f5a100!important;stroke-width:2.5!important;opacity:1!important;}
+  .edge.hover-edge{stroke:#f5a100!important;opacity:1!important;}
 #toolbar{display:flex;align-items:center;gap:6px;padding:8px 12px;background:var(--color-background-primary);border-top:0.5px solid var(--color-border-tertiary)}
 button{font-family:var(--font-sans);font-size:12px;padding:5px 10px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-primary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:4px}
 button:hover{background:var(--color-background-secondary)}
@@ -1727,10 +1729,10 @@ button:disabled{opacity:.35;cursor:not-allowed}
   <div id="canvas">
     <svg id="svg-layer">
       <defs>
-        <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="10" markerHeight="10" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+        <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
           <path d="M1 1L9 5L1 9Z" fill="var(--color-border-primary)" stroke="none"/>
         </marker>
-        <marker id="arr-hover" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="10" markerHeight="10" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+        <marker id="arr-hover" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
           <path d="M1 1L9 5L1 9Z" fill="#f5a100" stroke="none"/>
         </marker>
       </defs>
