@@ -24,6 +24,7 @@
   --color-border-secondary: rgba(0,0,0,.22);
   --color-border-primary: rgba(0,0,0,.32);
   --color-border-info: #b5d4f4;
+  --color-edge: #aaa8a0;
   --border-radius-md: 8px;
   --border-radius-lg: 12px;
 }
@@ -42,6 +43,7 @@ body.dark{
   --color-border-secondary: rgba(255,255,255,.18);
   --color-border-primary: rgba(255,255,255,.28);
   --color-border-info: #185fa5;
+  --color-edge: #6e6c66;
 }
 html,body{height:100%;background:var(--color-background-secondary);color:var(--color-text-primary);font-family:var(--font-sans)}
 #app{display:flex;flex-direction:column;height:100vh}
@@ -142,7 +144,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+右クリック×2: 接続 | ホイール: ズーム | Shift+ドラッグ: 全体移動 | F: 選択ノードを中央へ | WASD: スクロール | Ctrl+Shift+L: 子孫含めて削除 | Shift+N: 新規タブで開く</span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.52</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.53</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -151,10 +153,10 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="canvas">
     <svg id="svg-layer">
       <defs>
-        <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-          <path d="M1 1L9 5L1 9Z" fill="var(--color-border-primary)" stroke="none"/>
+        <marker id="arr" viewBox="0 0 10 10" refX="7.5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M1 1L9 5L1 9Z" fill="var(--color-edge)" stroke="none"/>
         </marker>
-        <marker id="arr-hover" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <marker id="arr-hover" viewBox="0 0 10 10" refX="7.5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
           <path d="M1 1L9 5L1 9Z" fill="#f5a100" stroke="none"/>
         </marker>
       </defs>
@@ -562,7 +564,7 @@ function renderEdges(){
     const mx=(ax+ex)/2;
     path.setAttribute('d',`M${ax} ${ay} Q${mx} ${ay} ${ex} ${ey}`);
     path.setAttribute('fill','none');
-    path.setAttribute('stroke','var(--color-border-secondary)');
+    path.setAttribute('stroke','var(--color-edge)');
     path.setAttribute('stroke-width', String(1.5 * scale));
     path.setAttribute('class','edge');
     path.dataset.from=String(e.from);
@@ -1567,7 +1569,7 @@ function renderEdges(){
     const ex=bx-(dx/dist)*offset,ey=by-(dy/dist)*offset;
     const path=document.createElementNS('http://www.w3.org/2000/svg','path');
     path.setAttribute('d','M'+ax+' '+ay+' Q'+((ax+ex)/2)+' '+ay+' '+ex+' '+ey);
-    path.setAttribute('fill','none');path.setAttribute('stroke','var(--color-border-secondary)');
+    path.setAttribute('fill','none');path.setAttribute('stroke','var(--color-edge)');
     path.setAttribute('stroke-width',String(1.5*scale));path.setAttribute('class','edge');
     path.dataset.from=String(e.from);path.dataset.to=String(e.to);
     path.setAttribute('marker-end','url(#arr)');
@@ -1678,6 +1680,7 @@ renderAll();
   --color-text-primary:#1a1a19;--color-text-secondary:#6b6a64;--color-text-tertiary:#9c9a92;
   --color-border-tertiary:rgba(0,0,0,.12);--color-border-secondary:rgba(0,0,0,.22);
   --color-border-primary:rgba(0,0,0,.32);--color-text-info:#0c447c;
+  --color-edge:#aaa8a0;
   --border-radius-md:8px;--border-radius-lg:12px;
 }
 body.dark{
@@ -1685,6 +1688,7 @@ body.dark{
   --color-text-primary:#e8e6de;--color-text-secondary:#a8a69e;--color-text-tertiary:#6e6c66;
   --color-border-tertiary:rgba(255,255,255,.1);--color-border-secondary:rgba(255,255,255,.18);
   --color-border-primary:rgba(255,255,255,.28);--color-text-info:#85b7eb;
+  --color-edge:#6e6c66;
 }
 html,body{height:100%;background:var(--color-background-secondary);color:var(--color-text-primary);font-family:var(--font-sans)}
 #app{display:flex;flex-direction:column;height:100vh}
@@ -1729,10 +1733,10 @@ button:disabled{opacity:.35;cursor:not-allowed}
   <div id="canvas">
     <svg id="svg-layer">
       <defs>
-        <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-          <path d="M1 1L9 5L1 9Z" fill="var(--color-border-primary)" stroke="none"/>
+        <marker id="arr" viewBox="0 0 10 10" refX="7.5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M1 1L9 5L1 9Z" fill="var(--color-edge)" stroke="none"/>
         </marker>
-        <marker id="arr-hover" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <marker id="arr-hover" viewBox="0 0 10 10" refX="7.5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
           <path d="M1 1L9 5L1 9Z" fill="#f5a100" stroke="none"/>
         </marker>
       </defs>
