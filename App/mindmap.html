@@ -144,7 +144,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+右クリック×2: 接続 | ホイール: ズーム | Shift+ドラッグ: 全体移動 | F: 選択ノードを中央へ | WASD: スクロール | Ctrl+Shift+L: 子孫含めて削除 | Shift+N: 新規タブで開く</span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.53</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.54</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -153,10 +153,10 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="canvas">
     <svg id="svg-layer">
       <defs>
-        <marker id="arr" viewBox="0 0 10 10" refX="7.5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <marker id="arr" viewBox="0 0 10 10" refX="7.4" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
           <path d="M1 1L9 5L1 9Z" fill="var(--color-edge)" stroke="none"/>
         </marker>
-        <marker id="arr-hover" viewBox="0 0 10 10" refX="7.5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <marker id="arr-hover" viewBox="0 0 10 10" refX="7.4" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
           <path d="M1 1L9 5L1 9Z" fill="#f5a100" stroke="none"/>
         </marker>
       </defs>
@@ -833,8 +833,43 @@ function wouldCreateCycle(fromId, toId){
 
 function openNodeLink(n){
   const text=(n.type==='image'?(n.comment||''):(n.text||'')).trim();
-  if(!text){showToast('\u26A0 \u30CE\u30FC\u30C9\u306B\u30C6\u30AD\u30B9\u30C8\u304C\u3042\u308A\u307E\u305B\u3093');return;}
-  window.open(text,'_blank','noopener,noreferrer');
+  if(!text){showToast('⚠ ノードにテキストがありません');return;}
+
+  // 絶対URLの場合はそのまま開く
+  if(/^https?:\/\//i.test(text)||/^[a-z][a-z0-9+\-.]*:\/\//i.test(text)){
+    window.open(text,'_blank','noopener,noreferrer');
+    return;
+  }
+
+  // 相対パスとして解決を試みる
+  let resolvedUrl=null;
+  try{
+    resolvedUrl=new URL(text,window.location.href).href;
+  }catch(err){
+    resolvedUrl=null;
+  }
+
+  if(resolvedUrl){
+    // 相対パスで fetch (HEAD) して存在確認
+    fetch(resolvedUrl,{method:'HEAD'})
+      .then(res=>{
+        if(res.ok){
+          // 相対パスで開ける
+          window.open(resolvedUrl,'_blank','noopener,noreferrer');
+        } else {
+          // 存在しない → 絶対パスとしてそのまま試す
+          showToast('⚠ 相対パスで見つからず絶対パスで開きます');
+          window.open(text,'_blank','noopener,noreferrer');
+        }
+      })
+      .catch(()=>{
+        // fetch自体が失敗（file://環境など）→ 相対パスで開く
+        window.open(resolvedUrl,'_blank','noopener,noreferrer');
+      });
+  } else {
+    // URL解決に失敗 → そのまま開く
+    window.open(text,'_blank','noopener,noreferrer');
+  }
 }
 function ctrlConnectNode(n){
   if(ctrlConnectPending===null){
@@ -1733,10 +1768,10 @@ button:disabled{opacity:.35;cursor:not-allowed}
   <div id="canvas">
     <svg id="svg-layer">
       <defs>
-        <marker id="arr" viewBox="0 0 10 10" refX="7.5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <marker id="arr" viewBox="0 0 10 10" refX="7.4" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
           <path d="M1 1L9 5L1 9Z" fill="var(--color-edge)" stroke="none"/>
         </marker>
-        <marker id="arr-hover" viewBox="0 0 10 10" refX="7.5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <marker id="arr-hover" viewBox="0 0 10 10" refX="7.4" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
           <path d="M1 1L9 5L1 9Z" fill="#f5a100" stroke="none"/>
         </marker>
       </defs>
