@@ -144,7 +144,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+右クリック×2: 接続 | ホイール: ズーム | Shift+ドラッグ: 全体移動 | F: 選択ノードを中央へ | WASD: スクロール | Ctrl+Shift+L: 子孫含めて削除 | Shift+N: 新規タブで開く</span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.54</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.55</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -578,7 +578,7 @@ function applyHoverHighlight(){
   document.querySelectorAll('.hover-self,.hover-parent,.hover-child').forEach(el=>{
     el.classList.remove('hover-self','hover-parent','hover-child');
   });
-  document.querySelectorAll('.edge.hover-edge').forEach(e=>{e.classList.remove('hover-edge');e.setAttribute('marker-end','url(#arr)');});
+  document.querySelectorAll('.edge.hover-edge').forEach(e=>{e.classList.remove('hover-edge');e.setAttribute('marker-end','url(#arr)');e.setAttribute('stroke-width',String(1.5*scale));});
   if(hoveredNodeId===null)return;
 
   const parentIds=new Set(edges.filter(e=>e.to===hoveredNodeId).map(e=>e.from));
@@ -1499,7 +1499,7 @@ function applyHoverHighlight(){
   document.querySelectorAll('.hover-self,.hover-parent,.hover-child').forEach(el=>{
     el.classList.remove('hover-self','hover-parent','hover-child');
   });
-  document.querySelectorAll('.edge.hover-edge').forEach(e=>{e.classList.remove('hover-edge');e.setAttribute('marker-end','url(#arr)');});
+  document.querySelectorAll('.edge.hover-edge').forEach(e=>{e.classList.remove('hover-edge');e.setAttribute('marker-end','url(#arr)');e.setAttribute('stroke-width',String(1.5*scale));});
   if(hoveredNodeId===null)return;
   const parentIds=new Set(edges.filter(e=>e.to===hoveredNodeId).map(e=>e.from));
   const childIds=new Set(edges.filter(e=>e.from===hoveredNodeId).map(e=>e.to));
