@@ -182,7 +182,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+右クリック×2: 接続 | ホイール: ズーム | Shift+ドラッグ: 全体移動 | F: 選択ノードを中央へ | WASD: スクロール | Ctrl+Shift+L: 子孫含めて削除 | Shift+N: 新規タブで開く</span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.57</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.58</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -352,6 +352,7 @@ let ctrlDragging=false;                       // ctrl+drag moves children too
 let hoveredNodeId=null;                       // node currently hovered
 let nodeId=0;
 let history=[], historyIdx=-1, _skipHistory=false;
+let _suppressSpawnAnim=false; // true while restoring an undo/redo snapshot, so nodes don't all re-spawn
 let _unsaved=false; // true when edits exist that have not been downloaded
 
 const canvas=document.getElementById('canvas');
@@ -376,11 +377,13 @@ function pushHistory(){
 }
 function restoreSnapshot(s){
   _skipHistory=true;
+  _suppressSpawnAnim=true;
   nodesLayer.querySelectorAll('.node-el,.img-node-el').forEach(e=>e.remove());
   nodes=s.nodes; edges=s.edges; nodeId=s.nodeId;
   nodes.forEach(n=>{if(n.type==='image')createImgNodeEl(n);else createNodeEl(n);});
   renderAll();
   _skipHistory=false;
+  _suppressSpawnAnim=false;
 }
 function undo(){if(historyIdx<=0)return;historyIdx--;restoreSnapshot(history[historyIdx]);selected=null;updateUndoRedo();}
 function redo(){if(historyIdx>=history.length-1)return;historyIdx++;restoreSnapshot(history[historyIdx]);selected=null;updateUndoRedo();}
@@ -483,7 +486,7 @@ let editingNodeId=null;
 // ── Text node rendering ───────────────────────────────────
 function createNodeEl(n){
   const el=document.createElement('div');
-  el.className='node-el spawn-in';el.id='node-'+n.id;
+  el.className=_suppressSpawnAnim?'node-el':'node-el spawn-in';el.id='node-'+n.id;
   nodesLayer.appendChild(el);
   el.addEventListener('animationend',()=>el.classList.remove('spawn-in'));
   el.addEventListener('mousedown',e=>onNodeMouseDown(e,n));
@@ -519,7 +522,7 @@ function renderTextNode(n){
 // ── Image node rendering ──────────────────────────────────
 function createImgNodeEl(n){
   const el=document.createElement('div');
-  el.className='img-node-el spawn-in';el.id='node-'+n.id;
+  el.className=_suppressSpawnAnim?'img-node-el':'img-node-el spawn-in';el.id='node-'+n.id;
   nodesLayer.appendChild(el);
   el.addEventListener('animationend',()=>el.classList.remove('spawn-in'));
   el.addEventListener('mousedown',e=>onNodeMouseDown(e,n));
