@@ -181,8 +181,8 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
 <div id="app">
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
-    <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+右クリック×2: 接続 | ホイール: ズーム | Shift+ドラッグ: 全体移動 | F: 選択ノードを中央へ | WASD: スクロール | Ctrl+Shift+L: 子孫含めて削除 | Shift+N: 新規タブで開く</span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.58</span>
+    <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+右クリック×2: 接続 | ホイール: ズーム | Shift+ドラッグ: 全体移動 | F: 選択ノードを中央へ | WASD: スクロール | Ctrl+Shift+L: 子孫含めて削除 | Ctrl+Shift+クリック: 同じ内容のノードへジャンプ | Shift+N: 新規タブで開く</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.60</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -343,6 +343,7 @@ function getColors(){return isDark()?COLORS_DARK:COLORS;}
 //        {id, type:'image', x, y, src, comment}                    (image nodes)
 let nodes=[], edges=[], selected=null;
 let connecting=false, connectFrom=null;       // toolbar connect mode (kept for btn-connect)
+let _dupJumpContent=null, _dupJumpIdx=0;      // Ctrl+Shift+click: cycle through nodes with same content
 let ctrlConnectPending=null;                  // ctrl+right-click connect
 let panX=0, panY=0, isPanning=false, panStart={x:0,y:0};
 let scale=1;                                  // zoom
@@ -701,6 +702,10 @@ function onNodeClick(e,n){
       connectFrom=null;connecting=false;canvas.classList.remove('connecting');
       document.getElementById('btn-connect').classList.remove('active');renderEdges();
     }
+    return;
+  }
+  if((e.ctrlKey||e.metaKey)&&e.shiftKey){
+    jumpToDuplicateNode(n);
     return;
   }
   if(e.shiftKey&&n.type==='text'){
@@ -1322,6 +1327,26 @@ function centerOnNode(nodeId, andRender=true){
   if(andRender){renderAll();applySearchHighlight();}
 }
 
+// Ctrl+Shift+click on a node: jump to another node with identical content.
+// Cycling is tracked per content group (not per clicked node) so repeatedly
+// clicking anywhere within the same group of duplicates advances through
+// all of them in order, instead of bouncing back and forth between two.
+function jumpToDuplicateNode(n){
+  const content=(n.type==='image'?(n.comment||''):(n.text||'')).trim();
+  if(!content){showToast('⚠ ノードの内容が空です');return;}
+  const group=nodes.filter(nd=>nd.type===n.type&&(nd.type==='image'?(nd.comment||''):(nd.text||'')).trim()===content);
+  if(group.length<2){showToast('⚠ 同じ内容の他のノードはありません');return;}
+  if(_dupJumpContent===content){
+    _dupJumpIdx=(_dupJumpIdx+1)%group.length;
+  } else {
+    _dupJumpContent=content;
+    _dupJumpIdx=(group.findIndex(g=>g.id===n.id)+1)%group.length;
+  }
+  const target=group[_dupJumpIdx];
+  centerOnNode(target.id);
+  showToast(group.length>2?`🔎 同じ内容のノードへジャンプ (${_dupJumpIdx+1}/${group.length})`:'🔎 同じ内容のノードへジャンプしました');
+}
+
 document.getElementById('search-input').addEventListener('input',function(){
   const q=this.value.trim();
   if(!q){searchResults=[];searchIdx=0;updateSearchUI();renderAll();return;}
@@ -1591,6 +1616,7 @@ function renderAll(){
       if(n.type==='text'){
         el.addEventListener('click',e=>{
           e.stopPropagation();
+          if((e.ctrlKey||e.metaKey)&&e.shiftKey){jumpToDuplicateNode(n);return;}
           if(!hasChildren(n.id))return;
           if(collapsed.has(n.id))collapsed.delete(n.id);else collapsed.add(n.id);
           renderAll();
@@ -1603,6 +1629,10 @@ function renderAll(){
         el.addEventListener('mouseenter',()=>{hoveredNodeId=n.id;applyHoverHighlight();});
         el.addEventListener('mouseleave',()=>{hoveredNodeId=null;applyHoverHighlight();});
       } else {
+        el.addEventListener('click',e=>{
+          e.stopPropagation();
+          if((e.ctrlKey||e.metaKey)&&e.shiftKey)jumpToDuplicateNode(n);
+        });
         el.addEventListener('contextmenu',e=>{
           e.preventDefault();e.stopPropagation();
           const t=(n.comment||'').trim();
@@ -1717,6 +1747,32 @@ function centerOn(id,andRender=true){
   panX=rect.width/2-n.x*scale;panY=rect.height/2-n.y*scale;
   if(andRender){renderAll();applySHL();}
 }
+let _dupJumpContent=null,_dupJumpIdx=0;
+let toastTimer=null;
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.classList.remove('show');
+  void t.offsetWidth; // force reflow so the pop/progress-bar animation restarts every time
+  t.textContent=msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'),2200);
+}
+function jumpToDuplicateNode(n){
+  const content=(n.type==='image'?(n.comment||''):(n.text||'')).trim();
+  if(!content){showToast('⚠ ノードの内容が空です');return;}
+  const group=nodes.filter(nd=>nd.type===n.type&&(nd.type==='image'?(nd.comment||''):(nd.text||'')).trim()===content);
+  if(group.length<2){showToast('⚠ 同じ内容の他のノードはありません');return;}
+  if(_dupJumpContent===content){
+    _dupJumpIdx=(_dupJumpIdx+1)%group.length;
+  } else {
+    _dupJumpContent=content;
+    _dupJumpIdx=(group.findIndex(g=>g.id===n.id)+1)%group.length;
+  }
+  const target=group[_dupJumpIdx];
+  centerOn(target.id);
+  showToast(group.length>2?('🔎 同じ内容のノードへジャンプ ('+(_dupJumpIdx+1)+'/'+group.length+')'):'🔎 同じ内容のノードへジャンプしました');
+}
 document.getElementById('search-input').addEventListener('input',function(){
   const q=this.value.trim();
   if(!q){sResults=[];sIdx=0;updateSearchUI();renderAll();return;}doSearch(q);
@@ -1823,6 +1879,18 @@ button:disabled{opacity:.35;cursor:not-allowed}
 #theme-icon{display:inline-block;transition:transform .1s}
 .theme-spin{animation:themeSpin .5s var(--ease-bounce)}
 .sep{width:0.5px;height:20px;background:var(--color-border-tertiary);margin:0 2px}
+#toast{position:absolute;bottom:22px;left:50%;overflow:hidden;
+  transform:translateX(-50%) translateY(18px) scale(.9);
+  background:var(--color-text-primary);color:var(--color-background-primary);
+  font-size:12.5px;font-weight:500;padding:8px 18px;border-radius:22px;
+  opacity:0;pointer-events:none;white-space:nowrap;z-index:300;
+  box-shadow:0 10px 28px rgba(0,0,0,.22),0 2px 8px rgba(0,0,0,.14);
+  transition:opacity .32s var(--ease-out),transform .48s var(--ease-bounce);
+}
+#toast.show{opacity:.94;transform:translateX(-50%) translateY(0) scale(1)}
+#toast::after{content:'';position:absolute;left:0;bottom:0;height:2.5px;width:100%;
+  background:rgba(255,255,255,.55);transform-origin:left;transform:scaleX(1);}
+#toast.show::after{transition:transform 2.2s linear;transform:scaleX(0)}
 #search-input{font-size:12px;padding:4px 8px 4px 24px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);outline:none;width:140px;font-family:var(--font-sans)}
 #hint{font-size:11px;color:var(--color-text-tertiary);margin-left:auto}
 </style>
@@ -1831,7 +1899,7 @@ button:disabled{opacity:.35;cursor:not-allowed}
 <div id="app">
   <div id="header">
     <h1>🗺 ${escHtmlStr(title)}</h1>
-    <span style="font-size:11px;color:var(--color-text-tertiary)">クリック: 展開/折り畳み | ホイール: ズーム | ドラッグ: 移動 | Shift+Q: 全展開 | Shift+W: 全折り畳み | WASD: スクロール</span>
+    <span style="font-size:11px;color:var(--color-text-tertiary)">クリック: 展開/折り畳み | ホイール: ズーム | ドラッグ: 移動 | Shift+Q: 全展開 | Shift+W: 全折り畳み | WASD: スクロール | Ctrl+Shift+クリック: 同じ内容のノードへジャンプ</span>
     <button id="btn-theme" style="margin-left:8px;padding:4px 10px"><i id="theme-icon" class="ti ti-moon"></i> <span id="theme-label">ダーク</span></button>
   </div>
   <div id="canvas">
@@ -1846,6 +1914,7 @@ button:disabled{opacity:.35;cursor:not-allowed}
       </defs>
     </svg>
     <div id="nodes-layer"></div>
+    <div id="toast"></div>
   </div>
   <div id="toolbar">
     <div style="position:relative;display:flex;align-items:center">
