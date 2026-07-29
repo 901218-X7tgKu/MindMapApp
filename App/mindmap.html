@@ -181,8 +181,8 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
 <div id="app">
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
-    <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+右クリック×2: 接続 | ホイール: ズーム | Shift+ドラッグ: 全体移動 | F: 選択ノードを中央へ | WASD: スクロール | Ctrl+Shift+L: 子孫含めて削除 | Ctrl+Shift+クリック: 同じ内容のノードへジャンプ | Shift+N: 新規タブで開く</span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.60</span>
+    <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+右クリック×2: 接続 | ホイール: ズーム | F: 選択ノードを中央へ | Z: 最も若いIDのノードを中央へ | WASD: スクロール | Ctrl+Shift+L: 子孫含めて削除 | Ctrl+Shift+クリック: 同じ内容のノードへジャンプ | Shift+N: 新規タブで開く</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.62</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -1188,6 +1188,16 @@ document.addEventListener('keydown',e=>{
     if(selected!==null){e.preventDefault();centerOnNode(selected);showToast('📍 ノードを中央に表示しました');}
   }
 
+  // Z: center on the lowest-id node (usually the first-created node)
+  if(e.key==='z'&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey){
+    if(nodes.length>0){
+      e.preventDefault();
+      const youngest=nodes.reduce((min,n)=>n.id<min.id?n:min,nodes[0]);
+      centerOnNode(youngest.id);
+      showToast('📍 最も若いIDのノードを中央に表示しました');
+    }
+  }
+
   // WASD: pan canvas (75% of viewport width/height per press)
   if(!e.ctrlKey&&!e.metaKey&&!e.shiftKey){
     const rect=canvas.getBoundingClientRect();
@@ -1788,6 +1798,14 @@ document.addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&e.key==='f'){e.preventDefault();document.getElementById('search-input').focus();}
   if(e.shiftKey&&e.key==='Q'){sResults=[];sIdx=0;collapsed.clear();renderAll();}
   if(e.shiftKey&&e.key==='W'){nodes.forEach(n=>{if(hasChildren(n.id))collapsed.add(n.id);});renderAll();}
+  if(e.key==='z'&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey){
+    if(nodes.length>0){
+      e.preventDefault();
+      const youngest=nodes.reduce((min,n)=>n.id<min.id?n:min,nodes[0]);
+      centerOn(youngest.id);
+      showToast('📍 最も若いIDのノードを中央に表示しました');
+    }
+  }
   if(!e.ctrlKey&&!e.metaKey&&!e.shiftKey){
     const rect=canvas.getBoundingClientRect();
     const stepX=rect.width*0.5;const stepY=rect.height*0.5;
@@ -1899,7 +1917,7 @@ button:disabled{opacity:.35;cursor:not-allowed}
 <div id="app">
   <div id="header">
     <h1>🗺 ${escHtmlStr(title)}</h1>
-    <span style="font-size:11px;color:var(--color-text-tertiary)">クリック: 展開/折り畳み | ホイール: ズーム | ドラッグ: 移動 | Shift+Q: 全展開 | Shift+W: 全折り畳み | WASD: スクロール | Ctrl+Shift+クリック: 同じ内容のノードへジャンプ</span>
+    <span style="font-size:11px;color:var(--color-text-tertiary)">クリック: 展開/折り畳み | ホイール: ズーム | ドラッグ: 移動 | Shift+Q: 全展開 | Shift+W: 全折り畳み | WASD: スクロール | Z: 最も若いIDのノードを中央へ | Ctrl+Shift+クリック: 同じ内容のノードへジャンプ</span>
     <button id="btn-theme" style="margin-left:8px;padding:4px 10px"><i id="theme-icon" class="ti ti-moon"></i> <span id="theme-label">ダーク</span></button>
   </div>
   <div id="canvas">
