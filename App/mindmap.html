@@ -182,7 +182,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+右クリック×2: 接続 | ホイール: ズーム | F: 選択ノードを中央へ | Z: 最も若いIDのノードを中央へ | WASD: スクロール | Ctrl+Shift+L: 子孫含めて削除 | Ctrl+Shift+クリック: 同じ内容のノードへジャンプ | Shift+N: 新規タブで開く</span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.62</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.63</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -1338,13 +1338,15 @@ function centerOnNode(nodeId, andRender=true){
 }
 
 // Ctrl+Shift+click on a node: jump to another node with identical content.
+// Content is compared as text (text nodes) vs comment (image nodes), so a
+// text node and an image node with matching content are grouped together too.
 // Cycling is tracked per content group (not per clicked node) so repeatedly
 // clicking anywhere within the same group of duplicates advances through
 // all of them in order, instead of bouncing back and forth between two.
 function jumpToDuplicateNode(n){
   const content=(n.type==='image'?(n.comment||''):(n.text||'')).trim();
   if(!content){showToast('⚠ ノードの内容が空です');return;}
-  const group=nodes.filter(nd=>nd.type===n.type&&(nd.type==='image'?(nd.comment||''):(nd.text||'')).trim()===content);
+  const group=nodes.filter(nd=>(nd.type==='image'?(nd.comment||''):(nd.text||'')).trim()===content);
   if(group.length<2){showToast('⚠ 同じ内容の他のノードはありません');return;}
   if(_dupJumpContent===content){
     _dupJumpIdx=(_dupJumpIdx+1)%group.length;
@@ -1771,7 +1773,7 @@ function showToast(msg){
 function jumpToDuplicateNode(n){
   const content=(n.type==='image'?(n.comment||''):(n.text||'')).trim();
   if(!content){showToast('⚠ ノードの内容が空です');return;}
-  const group=nodes.filter(nd=>nd.type===n.type&&(nd.type==='image'?(nd.comment||''):(nd.text||'')).trim()===content);
+  const group=nodes.filter(nd=>(nd.type==='image'?(nd.comment||''):(nd.text||'')).trim()===content);
   if(group.length<2){showToast('⚠ 同じ内容の他のノードはありません');return;}
   if(_dupJumpContent===content){
     _dupJumpIdx=(_dupJumpIdx+1)%group.length;
