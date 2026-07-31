@@ -181,8 +181,8 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
 <div id="app">
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
-    <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+右クリック×2: 接続 | ホイール: ズーム | WASD: スクロール | Ctrl+Shift+L: 子孫含めて削除 | Ctrl+Shift+クリック: 同じ内容のノードへジャンプ | Shift+N: 新規タブで開く</span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.64</span>
+    <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+右クリック×2: 接続 | Z: 最も若いIDのノードを中央へ | N/B: 次/前の接続グループの最若IDノードを中央へ | WASD: スクロール </span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.65</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -1198,16 +1198,21 @@ document.addEventListener('keydown',e=>{
     }
   }
 
-  // N / B: center on the node with the next/previous ID relative to the selected node (wraps around)
+  // N / B: center on the representative (lowest-id) node of the next/previous
+  // connected group, relative to the group the selected node belongs to (wraps around)
   if((e.key==='n'||e.key==='b')&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey){
     if(selected!==null&&nodes.length>1){
-      const sorted=[...nodes].sort((a,b)=>a.id-b.id);
-      const idx=sorted.findIndex(n=>n.id===selected);
-      if(idx!==-1){
+      const {reps, find, minIdByRoot}=getConnectionGroupReps();
+      if(reps.length>1){
         e.preventDefault();
-        const target=e.key==='n'?sorted[(idx+1)%sorted.length]:sorted[(idx-1+sorted.length)%sorted.length];
-        centerOnNode(target.id);
-        showToast(e.key==='n'?'📍 次のIDのノードを中央に表示しました':'📍 前のIDのノードを中央に表示しました');
+        const curMin=minIdByRoot.get(find(selected));
+        const idx=reps.indexOf(curMin);
+        const targetId=e.key==='n'?reps[(idx+1+reps.length)%reps.length]:reps[(idx-1+reps.length)%reps.length];
+        centerOnNode(targetId);
+        showToast(e.key==='n'?'📍 次のグループのノードを中央に表示しました':'📍 前のグループのノードを中央に表示しました');
+      } else {
+        e.preventDefault();
+        showToast('⚠ 他の接続グループがありません');
       }
     }
   }
@@ -1339,6 +1344,28 @@ function updateSearchUI(){
   document.getElementById('search-count').textContent=
     hasQ?(total>0?(searchIdx+1)+'/'+total:'0件'):'';
   if(inp) inp.style.borderColor=hasQ&&total===0?'var(--color-text-danger)':'';
+}
+
+// Groups all nodes into connected components (via edges, undirected), and
+// returns each component's representative node — the one with the lowest ID —
+// sorted ascending by that ID. Used by the N/B key navigation below.
+function getConnectionGroupReps(){
+  const parent=new Map();
+  nodes.forEach(n=>parent.set(n.id,n.id));
+  function find(x){
+    while(parent.get(x)!==x){parent.set(x,parent.get(parent.get(x)));x=parent.get(x);}
+    return x;
+  }
+  function union(a,b){const ra=find(a),rb=find(b);if(ra!==rb)parent.set(ra,rb);}
+  edges.forEach(e=>{if(parent.has(e.from)&&parent.has(e.to))union(e.from,e.to);});
+  const minIdByRoot=new Map();
+  nodes.forEach(n=>{
+    const r=find(n.id);
+    const cur=minIdByRoot.get(r);
+    if(cur===undefined||n.id<cur)minIdByRoot.set(r,n.id);
+  });
+  const reps=[...minIdByRoot.values()].sort((a,b)=>a-b);
+  return {reps, find, minIdByRoot};
 }
 
 function centerOnNode(nodeId, andRender=true){
