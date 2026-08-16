@@ -182,7 +182,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+右クリック×2: 接続 | Z: 最も若いIDのノードを中央へ | N/B: 次/前の接続グループの最若IDノードを中央へ | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.66</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.69</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -515,7 +515,7 @@ function renderTextNode(n){
   // white-space:pre keeps each line intact (no wrapping), width grows to fit longest line
   const multiline=n.text.includes('\n');
   const wsStyle=multiline?'white-space:pre;text-align:left':'white-space:nowrap;text-align:center';
-  el.innerHTML=`<div class="node-box${n.isRoot?' root':''}${selected===n.id||isPending?' selected':''}${hc?' has-children':''}${isCollapsed?' collapsed':''}${srchCls?' '+srchCls:''}" style="background:${c.bg};border-color:${isPending?'var(--color-text-info)':c.border};color:${c.text};${wsStyle}">${escHtml(n.text).replace(/\n/g,'<br>')}</div>`;
+  el.innerHTML=`<div class="node-box${n.isRoot?' root':''}${selected===n.id||isPending?' selected':''}${hc?' has-children':''}${isCollapsed?' collapsed':''}${srchCls?' '+srchCls:''}" style="background:${c.bg};border-color:${isPending?'var(--color-text-info)':c.border};color:${c.text};${wsStyle}">${formatNodeText(n.text)}</div>`;
   const box=el.querySelector('.node-box');
   if(box)box.style.display='inline-block';
 }
@@ -543,7 +543,7 @@ function renderImgNode(n){
   const visible=isNodeVisible(n.id);
   el.classList.toggle('hidden',!visible);
   if(!visible)return;
-  const capText=n.comment?escHtml(n.comment):'<span style="color:var(--color-text-tertiary);font-style:italic">右クリックでコメント追加</span>';
+  const capText=n.comment?formatNodeText(n.comment):'<span style="color:var(--color-text-tertiary);font-style:italic">右クリックでコメント追加</span>';
   // Determine display width: stored n.width, or derive from natural image size (max 400px)
   const MAX_IMG_W=1000;
   function buildHtml(dispW,dispH){
@@ -578,6 +578,82 @@ function renderImgNode(n){
 }
 
 function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+// ── Inline text formatting markup ──────────────────────────
+// \c[color]text\  → colored text
+// \f[size]text\   → sized text (size = number(px) or CSS length like 1.4em)
+// Tags can be nested/combined: \f[15]\c[red]テスト\\ → 15px + red (each \ closes the innermost open tag)
+// \\ escapes a backslash to a literal one, but only outside any open tag (e.g. \\c[red]x\\ displays literally as \c[red]x\)
+function parseFmtSegments(raw){
+  const segs=[];
+  const stack=[]; // {type:'color'|'size', value}
+  let i=0,buf='';
+  const n=raw.length;
+  function currentFmt(){
+    const f={};
+    for(const s of stack)f[s.type]=s.value;
+    return f;
+  }
+  function flush(){
+    if(buf){segs.push(Object.assign({text:buf},currentFmt()));buf='';}
+  }
+  while(i<n){
+    const ch=raw[i];
+    if(ch==='\\'){
+      let m=/^\\c\[([^\]]*)\]/.exec(raw.slice(i));
+      if(m){
+        flush();
+        stack.push({type:'color',value:m[1]});
+        i+=m[0].length;
+        continue;
+      }
+      m=/^\\f\[([^\]]*)\]/.exec(raw.slice(i));
+      if(m){
+        flush();
+        stack.push({type:'size',value:m[1]});
+        i+=m[0].length;
+        continue;
+      }
+      if(stack.length){
+        // bare backslash inside an open tag closes the innermost one
+        flush();
+        stack.pop();
+        i+=1;
+        continue;
+      }
+      if(raw[i+1]==='\\'){
+        // no open tag: doubled backslash escapes to one literal backslash
+        buf+='\\';
+        i+=2;
+        continue;
+      }
+      buf+=ch;i+=1;continue;
+    }
+    buf+=ch;i++;
+  }
+  flush();
+  return segs;
+}
+function sanitizeFmtColor(c){
+  c=(c||'').trim();
+  return /^[a-zA-Z0-9#(),.% -]{1,40}$/.test(c)?c:null;
+}
+function sanitizeFmtSize(s){
+  const m=/^(\d+(?:\.\d+)?)(px|pt|em|rem|%)?$/.exec((s||'').trim());
+  return m?m[1]+(m[2]||'px'):null;
+}
+function formatNodeText(raw){
+  return parseFmtSegments(raw||'').map(function(seg){
+    const html=escHtml(seg.text).replace(/\n/g,'<br>');
+    let style='';
+    const col=seg.color?sanitizeFmtColor(seg.color):null;
+    const sz=seg.size?sanitizeFmtSize(seg.size):null;
+    if(col)style+='color:'+col+';';
+    if(sz)style+='font-size:'+sz+';';
+    if(!style)return html;
+    return '<span style="'+style+'">'+html+'</span>';
+  }).join('');
+}
 
 function renderNode(n){if(n.type==='image')renderImgNode(n);else renderTextNode(n);}
 function renderAll(){nodes.forEach(renderNode);renderEdges();applyHoverHighlight();}
@@ -1631,6 +1707,10 @@ function hasCollapsedAncestor(id,visited){
 }
 function isVisible(id){return!hasCollapsedAncestor(id,new Set());}
 function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+${parseFmtSegments.toString()}
+${sanitizeFmtColor.toString()}
+${sanitizeFmtSize.toString()}
+${formatNodeText.toString()}
 
 function applyHoverHighlight(){
   document.querySelectorAll('.hover-self,.hover-parent,.hover-child').forEach(el=>{
@@ -1709,10 +1789,10 @@ function renderAll(){
       const hc=hasChildren(n.id),isColl=collapsed.has(n.id);
       const multi=n.text.includes('\\n');
       const ws=multi?'white-space:pre;text-align:left':'white-space:nowrap;text-align:center';
-      el.innerHTML='<div class="node-box'+(n.isRoot?' root':'')+(hc?' has-children':'')+(isColl?' collapsed':'')+'" style="background:'+c.bg+';border-color:'+c.border+';color:'+c.text+';'+ws+'">'+escHtml(n.text).replace(/\\n/g,'<br>')+'</div>';
+      el.innerHTML='<div class="node-box'+(n.isRoot?' root':'')+(hc?' has-children':'')+(isColl?' collapsed':'')+'" style="background:'+c.bg+';border-color:'+c.border+';color:'+c.text+';'+ws+'">'+formatNodeText(n.text)+'</div>';
     } else {
       const w=n.width||180;
-      const capText=n.comment?escHtml(n.comment):'<span style="color:var(--color-text-tertiary);font-style:italic">コメントなし</span>';
+      const capText=n.comment?formatNodeText(n.comment):'<span style="color:var(--color-text-tertiary);font-style:italic">コメントなし</span>';
       el.innerHTML='<div class="img-node-wrap" style="width:'+w+'px"><img src="'+n.src+'" draggable="false" style="width:'+w+'px;height:'+Math.round(w*2/3)+'px;object-fit:contain"><div class="img-node-caption">'+capText+'</div></div>';
       if(n.naturalW&&n.naturalH){
         const dh=Math.round(w*n.naturalH/n.naturalW);
