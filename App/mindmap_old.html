@@ -147,11 +147,6 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
 #img-modal .comment-ta{width:100%;height:90px;font-family:var(--font-sans);font-size:13px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);padding:10px;background:var(--color-background-secondary);color:var(--color-text-primary);resize:vertical;outline:none}
 #img-modal .comment-ta:focus{border-color:var(--color-border-primary)}
 
-/* Edge comment modal */
-#edge-modal .edge-label-input{width:100%;font-family:var(--font-sans);font-size:13px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);padding:8px 10px;background:var(--color-background-secondary);color:var(--color-text-primary);outline:none}
-#edge-modal .edge-label-input:focus{border-color:var(--color-border-primary)}
-.edge-label{cursor:pointer;user-select:none}
-
 /* Search highlight */
 .node-box.search-hit{outline:2.5px solid #f5a623;outline-offset:3px;}
 .node-box.search-current{outline:3px solid #e8430a;outline-offset:3px;}
@@ -187,7 +182,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+右クリック×2: 接続 | Z: 最も若いIDのノードを中央へ | N/B: 次/前の接続グループの最若IDノードを中央へ | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.70</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.66</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -280,19 +275,6 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
         <div class="modal-actions">
           <button id="img-modal-save"><i class="ti ti-check"></i> 保存</button>
           <button id="img-modal-cancel">キャンセル</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Edge comment modal -->
-    <div id="edge-modal" class="modal-overlay">
-      <div class="modal-box" style="width:380px">
-        <h3>エッジのコメント</h3>
-        <input id="edge-modal-input" class="edge-label-input" type="text" placeholder="接続線に添えるコメント（短文）" maxlength="60" autocomplete="off">
-        <div class="modal-actions">
-          <button id="edge-modal-save"><i class="ti ti-check"></i> 保存</button>
-          <button id="edge-modal-clear">クリア</button>
-          <button id="edge-modal-cancel">キャンセル</button>
         </div>
       </div>
     </div>
@@ -424,10 +406,7 @@ function serialize(){
       lines.push(`NODE ${n.id} ${n.colorIdx} ${n.isRoot?1:0} ${Math.round(n.x)} ${Math.round(n.y)} ${safeText}`);
     }
   });
-  edges.forEach(e=>{
-    const line=`EDGE ${e.from} ${e.to}`;
-    lines.push(e.label?`${line} ${e.label.replace(/\n/g,'\\n')}`:line);
-  });
+  edges.forEach(e=>lines.push(`EDGE ${e.from} ${e.to}`));
   if(collapsedNodes.size>0)lines.push(`COLLAPSED ${[...collapsedNodes].join(',')}`);
   lines.push(`META nodeId=${nodeId}`);
   return lines.join('\n');
@@ -450,12 +429,7 @@ function deserialize(text){
       const src=sep>=0?payload.slice(sep+2):'';
       ns.push({id,type:'image',x,y,src,comment,width});
     } else if(line.startsWith('EDGE ')){
-      const m=line.match(/^EDGE (\d+) (\d+)(?: (.*))?$/);
-      if(m){
-        const ed={from:+m[1],to:+m[2]};
-        if(m[3])ed.label=m[3].replace(/\\n/g,'\n');
-        es.push(ed);
-      }
+      const p=line.split(' ');es.push({from:+p[1],to:+p[2]});
     } else if(line.startsWith('TITLE ')){
       ns._title=line.slice(6);
     } else if(line.startsWith('COLLAPSED ')){
@@ -541,7 +515,7 @@ function renderTextNode(n){
   // white-space:pre keeps each line intact (no wrapping), width grows to fit longest line
   const multiline=n.text.includes('\n');
   const wsStyle=multiline?'white-space:pre;text-align:left':'white-space:nowrap;text-align:center';
-  el.innerHTML=`<div class="node-box${n.isRoot?' root':''}${selected===n.id||isPending?' selected':''}${hc?' has-children':''}${isCollapsed?' collapsed':''}${srchCls?' '+srchCls:''}" style="background:${c.bg};border-color:${isPending?'var(--color-text-info)':c.border};color:${c.text};${wsStyle}">${formatNodeText(n.text)}</div>`;
+  el.innerHTML=`<div class="node-box${n.isRoot?' root':''}${selected===n.id||isPending?' selected':''}${hc?' has-children':''}${isCollapsed?' collapsed':''}${srchCls?' '+srchCls:''}" style="background:${c.bg};border-color:${isPending?'var(--color-text-info)':c.border};color:${c.text};${wsStyle}">${escHtml(n.text).replace(/\n/g,'<br>')}</div>`;
   const box=el.querySelector('.node-box');
   if(box)box.style.display='inline-block';
 }
@@ -569,7 +543,7 @@ function renderImgNode(n){
   const visible=isNodeVisible(n.id);
   el.classList.toggle('hidden',!visible);
   if(!visible)return;
-  const capText=n.comment?formatNodeText(n.comment):'<span style="color:var(--color-text-tertiary);font-style:italic">右クリックでコメント追加</span>';
+  const capText=n.comment?escHtml(n.comment):'<span style="color:var(--color-text-tertiary);font-style:italic">右クリックでコメント追加</span>';
   // Determine display width: stored n.width, or derive from natural image size (max 400px)
   const MAX_IMG_W=1000;
   function buildHtml(dispW,dispH){
@@ -605,119 +579,10 @@ function renderImgNode(n){
 
 function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
-// ── Inline text formatting markup ──────────────────────────
-// \c[color]text\  → colored text
-// \f[size]text\   → sized text (size = number(px) or CSS length like 1.4em)
-// Tags can be nested/combined: \f[15]\c[red]テスト\\ → 15px + red (each \ closes the innermost open tag)
-// \\ escapes a backslash to a literal one, but only outside any open tag (e.g. \\c[red]x\\ displays literally as \c[red]x\)
-function parseFmtSegments(raw){
-  const segs=[];
-  const stack=[]; // {type:'color'|'size', value}
-  let i=0,buf='';
-  const n=raw.length;
-  function currentFmt(){
-    const f={};
-    for(const s of stack)f[s.type]=s.value;
-    return f;
-  }
-  function flush(){
-    if(buf){segs.push(Object.assign({text:buf},currentFmt()));buf='';}
-  }
-  while(i<n){
-    const ch=raw[i];
-    if(ch==='\\'){
-      let m=/^\\c\[([^\]]*)\]/.exec(raw.slice(i));
-      if(m){
-        flush();
-        stack.push({type:'color',value:m[1]});
-        i+=m[0].length;
-        continue;
-      }
-      m=/^\\f\[([^\]]*)\]/.exec(raw.slice(i));
-      if(m){
-        flush();
-        stack.push({type:'size',value:m[1]});
-        i+=m[0].length;
-        continue;
-      }
-      if(stack.length){
-        // bare backslash inside an open tag closes the innermost one
-        flush();
-        stack.pop();
-        i+=1;
-        continue;
-      }
-      if(raw[i+1]==='\\'){
-        // no open tag: doubled backslash escapes to one literal backslash
-        buf+='\\';
-        i+=2;
-        continue;
-      }
-      buf+=ch;i+=1;continue;
-    }
-    buf+=ch;i++;
-  }
-  flush();
-  return segs;
-}
-function sanitizeFmtColor(c){
-  c=(c||'').trim();
-  return /^[a-zA-Z0-9#(),.% -]{1,40}$/.test(c)?c:null;
-}
-function sanitizeFmtSize(s){
-  const m=/^(\d+(?:\.\d+)?)(px|pt|em|rem|%)?$/.exec((s||'').trim());
-  return m?m[1]+(m[2]||'px'):null;
-}
-function formatNodeText(raw){
-  return parseFmtSegments(raw||'').map(function(seg){
-    const html=escHtml(seg.text).replace(/\n/g,'<br>');
-    let style='';
-    const col=seg.color?sanitizeFmtColor(seg.color):null;
-    const sz=seg.size?sanitizeFmtSize(seg.size):null;
-    if(col)style+='color:'+col+';';
-    if(sz)style+='font-size:'+sz+';';
-    if(!style)return html;
-    return '<span style="'+style+'">'+html+'</span>';
-  }).join('');
-}
-
 function renderNode(n){if(n.type==='image')renderImgNode(n);else renderTextNode(n);}
 function renderAll(){nodes.forEach(renderNode);renderEdges();applyHoverHighlight();}
-// Point exactly ON the drawn quadratic bezier, at the arc-length midpoint of
-// the portion that's actually visible (i.e. excluding the parts hidden
-// under the two node boxes at either end).
-function edgeLabelPoint(p0x,p0y,p1x,p1y,p2x,p2y,rectA,rectB){
-  const samples=60;
-  const pts=[];
-  for(let i=0;i<=samples;i++){
-    const t=i/samples,mt=1-t;
-    pts.push([mt*mt*p0x+2*mt*t*p1x+t*t*p2x, mt*mt*p0y+2*mt*t*p1y+t*t*p2y]);
-  }
-  function inside(pt,rect){
-    return rect && Math.abs(pt[0]-rect.cx)<=rect.hw && Math.abs(pt[1]-rect.cy)<=rect.hh;
-  }
-  let startIdx=0,endIdx=pts.length-1;
-  if(rectA)for(let i=0;i<pts.length;i++){if(!inside(pts[i],rectA)){startIdx=i;break;}}
-  if(rectB)for(let i=pts.length-1;i>=0;i--){if(!inside(pts[i],rectB)){endIdx=i;break;}}
-  if(endIdx<=startIdx){startIdx=0;endIdx=pts.length-1;}
-  const seg=pts.slice(startIdx,endIdx+1);
-  const dists=[0];let total=0;
-  for(let i=1;i<seg.length;i++){
-    total+=Math.hypot(seg[i][0]-seg[i-1][0],seg[i][1]-seg[i-1][1]);
-    dists.push(total);
-  }
-  const half=total/2;
-  for(let i=1;i<dists.length;i++){
-    if(dists[i]>=half){
-      const segLen=dists[i]-dists[i-1];
-      const frac=segLen>0?(half-dists[i-1])/segLen:0;
-      return [seg[i-1][0]+(seg[i][0]-seg[i-1][0])*frac, seg[i-1][1]+(seg[i][1]-seg[i-1][1])*frac];
-    }
-  }
-  return seg[seg.length-1];
-}
 function renderEdges(){
-  svgEl.querySelectorAll('.edge,.edge-label,.edge-hit').forEach(p=>p.remove());
+  svgEl.querySelectorAll('.edge').forEach(p=>p.remove());
   edges.forEach(e=>{
     const a=nodes.find(n=>n.id===e.from),b=nodes.find(n=>n.id===e.to);
     if(!a||!b)return;
@@ -726,11 +591,9 @@ function renderEdges(){
     // Precise offset: parametric intersection of direction vector with node bounding rect
     let offset=10;
     const bEl=document.getElementById('node-'+b.id);
-    let bRect=null;
     if(bEl){
       const r=bEl.getBoundingClientRect();
       const hw=r.width/2+4, hh=r.height/2+4; // +4px clearance
-      bRect={cx:bx,cy:by,hw,hh};
       const dx=bx-ax, dy=by-ay;
       if(Math.abs(dx)>0.001||Math.abs(dy)>0.001){
         const tx=hw/Math.abs(dx), ty=hh/Math.abs(dy);
@@ -741,16 +604,9 @@ function renderEdges(){
     }
     const dx=bx-ax,dy=by-ay,dist=Math.sqrt(dx*dx+dy*dy)||1;
     const ex=bx-(dx/dist)*offset, ey=by-(dy/dist)*offset;
-    const mx=(ax+ex)/2;
-    const aEl=document.getElementById('node-'+a.id);
-    let aRect=null;
-    if(aEl){
-      const r=aEl.getBoundingClientRect();
-      aRect={cx:ax,cy:ay,hw:r.width/2+4,hh:r.height/2+4};
-    }
-    const dAttr=`M${ax} ${ay} Q${mx} ${ay} ${ex} ${ey}`;
     const path=document.createElementNS('http://www.w3.org/2000/svg','path');
-    path.setAttribute('d',dAttr);
+    const mx=(ax+ex)/2;
+    path.setAttribute('d',`M${ax} ${ay} Q${mx} ${ay} ${ex} ${ey}`);
     path.setAttribute('fill','none');
     path.setAttribute('stroke','var(--color-edge)');
     path.setAttribute('stroke-width', String(1.5 * scale));
@@ -759,41 +615,6 @@ function renderEdges(){
     path.dataset.to=String(e.to);
     path.setAttribute('marker-end','url(#arr)');
     svgEl.appendChild(path);
-    // Wide invisible hit-area on top of the thin visible line, so right-click
-    // doesn't require pixel-precise aim on a 1.5px stroke.
-    const hit=document.createElementNS('http://www.w3.org/2000/svg','path');
-    hit.setAttribute('d',dAttr);
-    hit.setAttribute('fill','none');
-    hit.setAttribute('stroke','transparent');
-    hit.setAttribute('stroke-width', String(Math.max(16, 12*scale)));
-    hit.setAttribute('class','edge-hit');
-    hit.style.cursor='context-menu';
-    hit.style.pointerEvents='stroke';
-    hit.dataset.from=String(e.from);
-    hit.dataset.to=String(e.to);
-    hit.addEventListener('contextmenu',evt=>onEdgeRightClick(evt,e));
-    svgEl.appendChild(hit);
-    if(e.label){
-      const [lx,ly]=edgeLabelPoint(ax,ay,mx,ay,ex,ey,aRect,bRect);
-      const text=document.createElementNS('http://www.w3.org/2000/svg','text');
-      text.setAttribute('x',String(lx));
-      text.setAttribute('y',String(ly));
-      text.setAttribute('text-anchor','middle');
-      text.setAttribute('dominant-baseline','middle');
-      text.setAttribute('font-size',String(11*scale));
-      text.setAttribute('font-family','var(--font-sans)');
-      text.setAttribute('fill','var(--color-text-primary)');
-      text.setAttribute('stroke','var(--color-background-primary)');
-      text.setAttribute('stroke-width',String(3*scale));
-      text.setAttribute('paint-order','stroke');
-      text.setAttribute('class','edge-label');
-      text.style.pointerEvents='auto';
-      text.dataset.from=String(e.from);
-      text.dataset.to=String(e.to);
-      text.textContent=e.label;
-      text.addEventListener('contextmenu',evt=>onEdgeRightClick(evt,e));
-      svgEl.appendChild(text);
-    }
   });
 }
 function applyHoverHighlight(){
@@ -1186,41 +1007,6 @@ document.getElementById('img-modal-save').addEventListener('click',()=>{
 });
 document.getElementById('img-modal-cancel').addEventListener('click',()=>closeOverlay(imgModal));
 imgModal.addEventListener('click',e=>{if(e.target===imgModal)closeOverlay(imgModal);});
-
-// ── Edge comment modal ────────────────────────────────────
-let editingEdge=null;
-const edgeModal=document.getElementById('edge-modal');
-const edgeModalInput=document.getElementById('edge-modal-input');
-function onEdgeRightClick(e,ed){
-  e.preventDefault();e.stopPropagation();
-  openEdgeModal(ed);
-}
-function openEdgeModal(ed){
-  editingEdge=ed;
-  edgeModalInput.value=ed.label||'';
-  edgeModal.classList.remove('closing');
-  edgeModal.classList.add('show');
-  edgeModalInput.focus();
-  edgeModalInput.select();
-}
-function saveEdgeModal(){
-  if(!editingEdge)return;
-  const val=edgeModalInput.value.trim();
-  if(val)editingEdge.label=val;else delete editingEdge.label;
-  closeOverlay(edgeModal);
-  pushHistory();renderAll();
-}
-document.getElementById('edge-modal-save').addEventListener('click',saveEdgeModal);
-document.getElementById('edge-modal-clear').addEventListener('click',()=>{
-  edgeModalInput.value='';
-  saveEdgeModal();
-});
-document.getElementById('edge-modal-cancel').addEventListener('click',()=>closeOverlay(edgeModal));
-edgeModal.addEventListener('click',e=>{if(e.target===edgeModal)closeOverlay(edgeModal);});
-edgeModalInput.addEventListener('keydown',e=>{
-  if(e.key==='Enter'){e.preventDefault();saveEdgeModal();}
-  else if(e.key==='Escape'){e.preventDefault();closeOverlay(edgeModal);}
-});
 
 // ── Canvas pan & zoom ────────────────────────────────────
 // Shift+left-click anywhere: pan all nodes (world-space shift)
@@ -1810,12 +1596,7 @@ function deserialize(text){
       const src=sep>=0?payload.slice(sep+2):'';
       ns.push({id,type:'image',x,y,src,comment,width,naturalW:0,naturalH:0});
     } else if(line.startsWith('EDGE ')){
-      const m=line.match(/^EDGE (\\d+) (\\d+)(?: (.*))?$/);
-      if(m){
-        const ed={from:+m[1],to:+m[2]};
-        if(m[3])ed.label=m[3].replace(/\\\\n/g,'\\n');
-        es.push(ed);
-      }
+      const p=line.split(' ');es.push({from:+p[1],to:+p[2]});
     } else if(line.startsWith('META ')){
       const mo=line.match(/nodeId=(\\d+)/);if(mo)nid=+mo[1];
     } else if(line.startsWith('COLLAPSED ')){
@@ -1850,10 +1631,6 @@ function hasCollapsedAncestor(id,visited){
 }
 function isVisible(id){return!hasCollapsedAncestor(id,new Set());}
 function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-${parseFmtSegments.toString()}
-${sanitizeFmtColor.toString()}
-${sanitizeFmtSize.toString()}
-${formatNodeText.toString()}
 
 function applyHoverHighlight(){
   document.querySelectorAll('.hover-self,.hover-parent,.hover-child').forEach(el=>{
@@ -1932,10 +1709,10 @@ function renderAll(){
       const hc=hasChildren(n.id),isColl=collapsed.has(n.id);
       const multi=n.text.includes('\\n');
       const ws=multi?'white-space:pre;text-align:left':'white-space:nowrap;text-align:center';
-      el.innerHTML='<div class="node-box'+(n.isRoot?' root':'')+(hc?' has-children':'')+(isColl?' collapsed':'')+'" style="background:'+c.bg+';border-color:'+c.border+';color:'+c.text+';'+ws+'">'+formatNodeText(n.text)+'</div>';
+      el.innerHTML='<div class="node-box'+(n.isRoot?' root':'')+(hc?' has-children':'')+(isColl?' collapsed':'')+'" style="background:'+c.bg+';border-color:'+c.border+';color:'+c.text+';'+ws+'">'+escHtml(n.text).replace(/\\n/g,'<br>')+'</div>';
     } else {
       const w=n.width||180;
-      const capText=n.comment?formatNodeText(n.comment):'<span style="color:var(--color-text-tertiary);font-style:italic">コメントなし</span>';
+      const capText=n.comment?escHtml(n.comment):'<span style="color:var(--color-text-tertiary);font-style:italic">コメントなし</span>';
       el.innerHTML='<div class="img-node-wrap" style="width:'+w+'px"><img src="'+n.src+'" draggable="false" style="width:'+w+'px;height:'+Math.round(w*2/3)+'px;object-fit:contain"><div class="img-node-caption">'+capText+'</div></div>';
       if(n.naturalW&&n.naturalH){
         const dh=Math.round(w*n.naturalH/n.naturalW);
@@ -1950,49 +1727,17 @@ function renderAll(){
   renderEdges();applyHoverHighlight();
 }
 
-function edgeLabelPoint(p0x,p0y,p1x,p1y,p2x,p2y,rectA,rectB){
-  const samples=60;
-  const pts=[];
-  for(let i=0;i<=samples;i++){
-    const t=i/samples,mt=1-t;
-    pts.push([mt*mt*p0x+2*mt*t*p1x+t*t*p2x, mt*mt*p0y+2*mt*t*p1y+t*t*p2y]);
-  }
-  function inside(pt,rect){
-    return rect && Math.abs(pt[0]-rect.cx)<=rect.hw && Math.abs(pt[1]-rect.cy)<=rect.hh;
-  }
-  let startIdx=0,endIdx=pts.length-1;
-  if(rectA)for(let i=0;i<pts.length;i++){if(!inside(pts[i],rectA)){startIdx=i;break;}}
-  if(rectB)for(let i=pts.length-1;i>=0;i--){if(!inside(pts[i],rectB)){endIdx=i;break;}}
-  if(endIdx<=startIdx){startIdx=0;endIdx=pts.length-1;}
-  const seg=pts.slice(startIdx,endIdx+1);
-  const dists=[0];let total=0;
-  for(let i=1;i<seg.length;i++){
-    total+=Math.hypot(seg[i][0]-seg[i-1][0],seg[i][1]-seg[i-1][1]);
-    dists.push(total);
-  }
-  const half=total/2;
-  for(let i=1;i<dists.length;i++){
-    if(dists[i]>=half){
-      const segLen=dists[i]-dists[i-1];
-      const frac=segLen>0?(half-dists[i-1])/segLen:0;
-      return [seg[i-1][0]+(seg[i][0]-seg[i-1][0])*frac, seg[i-1][1]+(seg[i][1]-seg[i-1][1])*frac];
-    }
-  }
-  return seg[seg.length-1];
-}
 function renderEdges(){
-  svgEl.querySelectorAll('.edge,.edge-label').forEach(p=>p.remove());
+  svgEl.querySelectorAll('.edge').forEach(p=>p.remove());
   edges.forEach(e=>{
     const a=nodes.find(n=>n.id===e.from),b=nodes.find(n=>n.id===e.to);
     if(!a||!b||!isVisible(a.id)||!isVisible(b.id))return;
     const ax=a.x*scale+panX,ay=a.y*scale+panY,bx=b.x*scale+panX,by=b.y*scale+panY;
     let offset=10;
     const bEl=document.getElementById('node-'+b.id);
-    let bRect=null;
     if(bEl){
       const r=bEl.getBoundingClientRect();
       const hw=r.width/2+4,hh=r.height/2+4;
-      bRect={cx:bx,cy:by,hw:hw,hh:hh};
       const dx=bx-ax,dy=by-ay;
       if(Math.abs(dx)>0.001||Math.abs(dy)>0.001){
         const tx=hw/Math.abs(dx),ty=hh/Math.abs(dy);
@@ -2003,39 +1748,13 @@ function renderEdges(){
     }
     const dx=bx-ax,dy=by-ay,dist=Math.sqrt(dx*dx+dy*dy)||1;
     const ex=bx-(dx/dist)*offset,ey=by-(dy/dist)*offset;
-    const mx=(ax+ex)/2;
-    const aEl=document.getElementById('node-'+a.id);
-    let aRect=null;
-    if(aEl){
-      const r=aEl.getBoundingClientRect();
-      aRect={cx:ax,cy:ay,hw:r.width/2+4,hh:r.height/2+4};
-    }
     const path=document.createElementNS('http://www.w3.org/2000/svg','path');
-    path.setAttribute('d','M'+ax+' '+ay+' Q'+mx+' '+ay+' '+ex+' '+ey);
+    path.setAttribute('d','M'+ax+' '+ay+' Q'+((ax+ex)/2)+' '+ay+' '+ex+' '+ey);
     path.setAttribute('fill','none');path.setAttribute('stroke','var(--color-edge)');
     path.setAttribute('stroke-width',String(1.5*scale));path.setAttribute('class','edge');
     path.dataset.from=String(e.from);path.dataset.to=String(e.to);
     path.setAttribute('marker-end','url(#arr)');
     svgEl.appendChild(path);
-    if(e.label){
-      const mp=edgeLabelPoint(ax,ay,mx,ay,ex,ey,aRect,bRect);
-      const lx=mp[0],ly=mp[1];
-      const text=document.createElementNS('http://www.w3.org/2000/svg','text');
-      text.setAttribute('x',String(lx));
-      text.setAttribute('y',String(ly));
-      text.setAttribute('text-anchor','middle');
-      text.setAttribute('dominant-baseline','middle');
-      text.setAttribute('font-size',String(11*scale));
-      text.setAttribute('font-family','var(--font-sans)');
-      text.setAttribute('fill','var(--color-text-primary)');
-      text.setAttribute('stroke','var(--color-background-primary)');
-      text.setAttribute('stroke-width',String(3*scale));
-      text.setAttribute('paint-order','stroke');
-      text.setAttribute('class','edge-label');
-      text.dataset.from=String(e.from);text.dataset.to=String(e.to);
-      text.textContent=e.label;
-      svgEl.appendChild(text);
-    }
   });
 }
 
