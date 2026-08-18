@@ -187,7 +187,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+右クリック×2: 接続 | Z: 最も若いIDのノードを中央へ | N/B: 次/前の接続グループの最若IDノードを中央へ | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.70</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.72</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -842,6 +842,55 @@ function makeImgNode(src,x,y,comment='',width=0){
   nodes.push(n);createImgNodeEl(n);renderNode(n);renderEdges();return n;
 }
 
+// ── Child-node placement (used by Ctrl+Enter) ─────────────
+// Estimate a text node's rendered box size (world units) without creating it,
+// using the same font metrics as the node boxes themselves.
+function estimateNodeSize(text){
+  const ruler=document.createElement('span');
+  ruler.style.cssText='position:fixed;visibility:hidden;white-space:pre;font-size:13px;font-weight:500;font-family:'+getComputedStyle(document.body).fontFamily+';padding:0;border:none;top:-9999px;left:-9999px';
+  document.body.appendChild(ruler);
+  const lines=(text||'').split('\n');
+  let maxW=60;
+  lines.forEach(line=>{ruler.textContent=line||'M';maxW=Math.max(maxW,ruler.offsetWidth);});
+  ruler.remove();
+  return {w:maxW+32+8, h:lines.length*20+16+4};
+}
+function rectsOverlap(ax,ay,aw,ah,bx,by,bw,bh,pad){
+  pad=pad||16;
+  return Math.abs(ax-bx)<(aw+bw)/2+pad && Math.abs(ay-by)<(ah+bh)/2+pad;
+}
+// Find a spot (world coords) for a new child of `parent` that doesn't overlap
+// the parent's own box or any of its existing children's boxes.
+function findChildPosition(parent){
+  const newSize=estimateNodeSize('新しいノード');
+  const parentEl=document.getElementById('node-'+parent.id);
+  const pr=parentEl?parentEl.getBoundingClientRect():null;
+  const parentSize=pr?{w:pr.width/scale,h:pr.height/scale}:{w:120,h:44};
+  const childIds=edges.filter(ed=>ed.from===parent.id).map(ed=>ed.to);
+  const siblings=childIds.map(id=>{
+    const nd=nodes.find(x=>x.id===id);
+    if(!nd)return null;
+    const el=document.getElementById('node-'+id);
+    const r=el?el.getBoundingClientRect():null;
+    const size=r?{w:r.width/scale,h:r.height/scale}:{w:120,h:44};
+    return {x:nd.x,y:nd.y,w:size.w,h:size.h};
+  }).filter(Boolean);
+  const obstacles=[{x:parent.x,y:parent.y,w:parentSize.w,h:parentSize.h},...siblings];
+  const baseRadius=Math.max(parentSize.w,parentSize.h)/2+140;
+  for(let ring=0;ring<8;ring++){
+    const radius=baseRadius+ring*80;
+    for(let a=0;a<360;a+=20){
+      const rad=a*Math.PI/180;
+      const cx=parent.x+radius*Math.cos(rad);
+      const cy=parent.y+radius*Math.sin(rad);
+      if(obstacles.every(o=>!rectsOverlap(cx,cy,newSize.w,newSize.h,o.x,o.y,o.w,o.h))){
+        return {x:cx,y:cy};
+      }
+    }
+  }
+  return {x:parent.x+220, y:parent.y+(siblings.length+1)*90};
+}
+
 // ── Drag nodes ────────────────────────────────────────────
 let dragNode=null,dragOffset={x:0,y:0},didDrag=false,dragDescendants=[];
 function onNodeMouseDown(e,n){
@@ -1177,15 +1226,23 @@ document.getElementById('img-modal-width').addEventListener('input',function(){
     renderAll();
   }
 });
-document.getElementById('img-modal-save').addEventListener('click',()=>{
+function saveImgModal(){
   if(!editingImgNode)return;
   editingImgNode.comment=imgModalComment.value;
   editingImgNode.width=+document.getElementById('img-modal-width').value;
   closeOverlay(imgModal);
   pushHistory();renderAll();
-});
+}
+document.getElementById('img-modal-save').addEventListener('click',saveImgModal);
 document.getElementById('img-modal-cancel').addEventListener('click',()=>closeOverlay(imgModal));
 imgModal.addEventListener('click',e=>{if(e.target===imgModal)closeOverlay(imgModal);});
+// Shift+Enter to save / Escape to cancel — works no matter which element
+// inside the modal currently has focus (textarea, slider, or a button
+// reached via Tab), matching the behaviour of inline node text editing.
+imgModal.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){e.preventDefault();e.stopPropagation();closeOverlay(imgModal);}
+  else if(e.key==='Enter'&&e.shiftKey){e.preventDefault();e.stopPropagation();saveImgModal();}
+});
 
 // ── Edge comment modal ────────────────────────────────────
 let editingEdge=null;
@@ -1218,8 +1275,15 @@ document.getElementById('edge-modal-clear').addEventListener('click',()=>{
 document.getElementById('edge-modal-cancel').addEventListener('click',()=>closeOverlay(edgeModal));
 edgeModal.addEventListener('click',e=>{if(e.target===edgeModal)closeOverlay(edgeModal);});
 edgeModalInput.addEventListener('keydown',e=>{
-  if(e.key==='Enter'){e.preventDefault();saveEdgeModal();}
-  else if(e.key==='Escape'){e.preventDefault();closeOverlay(edgeModal);}
+  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();e.stopPropagation();saveEdgeModal();}
+  else if(e.key==='Escape'){e.preventDefault();e.stopPropagation();closeOverlay(edgeModal);}
+});
+// Shift+Enter to save / Escape to cancel — works no matter which element
+// inside the modal currently has focus (input or a button reached via Tab),
+// matching the behaviour of inline node text editing.
+edgeModal.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){e.preventDefault();e.stopPropagation();closeOverlay(edgeModal);}
+  else if(e.key==='Enter'&&e.shiftKey){e.preventDefault();e.stopPropagation();saveEdgeModal();}
 });
 
 // ── Canvas pan & zoom ────────────────────────────────────
@@ -1389,6 +1453,7 @@ canvas.addEventListener('mousemove',e=>{
 document.addEventListener('keydown',e=>{
   if(e.target.tagName==='TEXTAREA'||e.target.tagName==='INPUT')return;
   if(e.target.isContentEditable)return;
+  if(e.target.closest&&e.target.closest('.modal-overlay'))return; // let modals (img/edge) handle their own keys
   if((e.ctrlKey||e.metaKey)&&e.key==='z'){e.preventDefault();undo();}
   if((e.ctrlKey||e.metaKey)&&(e.key==='y'||(e.shiftKey&&e.key==='z'))){e.preventDefault();redo();}
   if(e.shiftKey&&e.key==='N'){e.preventDefault();window.open(window.location.href,'_blank');return;}
@@ -1469,6 +1534,93 @@ document.addEventListener('keydown',e=>{
     e.preventDefault();
   }
 
+});
+
+// ── Node keyboard navigation & shortcuts ──────────────────
+document.addEventListener('keydown',e=>{
+  if(e.target.tagName==='TEXTAREA'||e.target.tagName==='INPUT')return;
+  if(e.target.isContentEditable)return;
+  if(e.target.closest&&e.target.closest('.modal-overlay'))return; // let modals (img/edge) handle their own keys
+
+  // Ctrl/Cmd+↑ / Ctrl/Cmd+↓: zoom in / out (around the viewport center)
+  if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&(e.key==='ArrowUp'||e.key==='ArrowDown')){
+    e.preventDefault();
+    const rect=canvas.getBoundingClientRect();
+    const mx=rect.width/2, my=rect.height/2;
+    const zoomFactor=e.key==='ArrowUp'?1.15:1/1.15;
+    const newScale=Math.min(4,Math.max(0.2,scale*zoomFactor));
+    panX=mx-(mx-panX)*(newScale/scale);
+    panY=my-(my-panY)*(newScale/scale);
+    scale=newScale;
+    renderAll();
+    return;
+  }
+
+  // Arrow keys (no modifiers): navigate the node tree
+  if((e.key==='ArrowUp'||e.key==='ArrowDown'||e.key==='ArrowLeft'||e.key==='ArrowRight')&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey){
+    if(selected===null)return;
+    const cur=nodes.find(nd=>nd.id===selected);
+    if(!cur)return;
+    e.preventDefault();
+    if(e.key==='ArrowUp'){
+      const parentIds=edges.filter(ed=>ed.to===cur.id).map(ed=>ed.from);
+      if(parentIds.length===0){showToast('⚠ 親ノードがありません');return;}
+      centerOnNode(Math.min(...parentIds));
+      showToast('📍 親ノードへ移動しました');
+    } else if(e.key==='ArrowDown'){
+      const childIds=edges.filter(ed=>ed.from===cur.id).map(ed=>ed.to);
+      if(childIds.length===0){showToast('⚠ 子ノードがありません');return;}
+      centerOnNode(Math.min(...childIds));
+      showToast('📍 子ノードへ移動しました');
+    } else {
+      // Left/Right: cycle through sibling nodes (nodes sharing a parent with
+      // the current one), advancing to a different-ID sibling each press.
+      const parentIds=edges.filter(ed=>ed.to===cur.id).map(ed=>ed.from);
+      if(parentIds.length===0){showToast('⚠ 兄弟ノードがありません');return;}
+      const siblingSet=new Set();
+      parentIds.forEach(pid=>{
+        edges.filter(ed=>ed.from===pid).forEach(ed=>{if(ed.to!==cur.id)siblingSet.add(ed.to);});
+      });
+      if(siblingSet.size===0){showToast('⚠ 兄弟ノードがありません');return;}
+      const group=[...siblingSet,cur.id].sort((a,b)=>a-b);
+      const idx=group.indexOf(cur.id);
+      const dir=e.key==='ArrowRight'?1:-1;
+      const targetId=group[(idx+dir+group.length)%group.length];
+      centerOnNode(targetId);
+      showToast(e.key==='ArrowRight'?'📍 次の兄弟ノードへ移動しました':'📍 前の兄弟ノードへ移動しました');
+    }
+    return;
+  }
+
+  // Enter family: edit / add child / jump to duplicate / open as link
+  if(e.key==='Enter'){
+    if(selected===null)return;
+    const cur=nodes.find(nd=>nd.id===selected);
+    if(!cur)return;
+    const ctrl=e.ctrlKey||e.metaKey;
+    e.preventDefault();
+    if(ctrl&&e.shiftKey){
+      // Ctrl+Shift+Enter: open node content as a link
+      openNodeLink(cur);
+    } else if(e.shiftKey){
+      // Shift+Enter: jump to another node with identical content
+      jumpToDuplicateNode(cur);
+    } else if(ctrl){
+      // Ctrl+Enter: add a new child node, positioned to avoid overlapping
+      // the parent or its existing children, using the parent's color.
+      const pos=findChildPosition(cur);
+      const colorIdx=cur.type==='text'?(cur.colorIdx||0):0;
+      const n=makeTextNode('新しいノード',pos.x,pos.y,colorIdx);
+      edges.push({from:cur.id,to:n.id});
+      if(collapsedNodes.has(cur.id))collapsedNodes.delete(cur.id);
+      selected=n.id;pushHistory();renderAll();
+      setTimeout(()=>startInlineEdit(n),0);
+    } else {
+      // Enter: start editing the selected node
+      if(cur.type==='image')openImgModal(cur);
+      else startInlineEdit(cur);
+    }
+  }
 });
 
 // ── Ctrl+V: paste image from clipboard only ──────────────
@@ -2374,16 +2526,49 @@ window.addEventListener('beforeunload',e=>{
 })();
 
 // ── Init ──────────────────────────────────────────────────
+// Starter map: doubles as a quick feature tour, arranged in a hexagon
+// around the root. The formatting/edge-comment branches demonstrate
+// those features using the features themselves.
 const rect=canvas.getBoundingClientRect();
 const cx=(rect.width>0?rect.width/2:500)/scale,cy=(rect.height>0?rect.height/2:300)/scale;
+const deg=d=>d*Math.PI/180;
+const ring=(angleDeg,radius)=>[cx+radius*Math.cos(deg(angleDeg)), cy+radius*Math.sin(deg(angleDeg))];
+const R1=210,R2=380;
+
 const root=makeTextNode('マインドマップ',cx,cy,0,true);
-const n1=makeTextNode('アイデアA',cx-160,cy-120,1);
-const n2=makeTextNode('アイデアB',cx+160,cy-120,2);
-const n3=makeTextNode('アイデアC',cx-160,cy+130,4);
-const n4=makeTextNode('アイデアD',cx+160,cy+130,3);
-const n5=makeTextNode('詳細1',cx-260,cy-210,1);
-const n6=makeTextNode('詳細2',cx-90,cy-210,1);
-edges.push({from:root.id,to:n1.id},{from:root.id,to:n2.id},{from:root.id,to:n3.id},{from:root.id,to:n4.id},{from:n1.id,to:n5.id},{from:n1.id,to:n6.id});
+
+let [x,y]=ring(-90,R1);      const bOps=makeTextNode('🖱️ ノード操作',x,y,1);
+[x,y]=ring(-90-28,R2);       const opsA=makeTextNode('Shift+左クリックでノード色変更',x,y,1);
+[x,y]=ring(-90,R2);          const opsB=makeTextNode('右クリックでテキスト編集',x,y,1);
+[x,y]=ring(-90+28,R2);       const opsC=makeTextNode('Shift+右クリックでノード削除\nCtrl+左クリックで新規ノード追加',x,y,1);
+
+[x,y]=ring(-30,R1);          const bFmt=makeTextNode('🎨 文字装飾',x,y,2);
+[x,y]=ring(-30-11,R2);       const fmtA=makeTextNode('\\c[#1c7ed6]色\\や\\f[20]サイズ\\を変更できます',x,y,2);
+[x,y]=ring(-30+11,R2);       const fmtB=makeTextNode('詳しくはREADME参照',x,y,2);
+
+[x,y]=ring(30,R1);           const bImg=makeTextNode('🖼️ 画像ノード',x,y,3);
+[x,y]=ring(30-11,R2);        const imgA=makeTextNode('画像をドラッグ＆ドロップ',x,y,3);
+[x,y]=ring(30+11,R2);        const imgB=makeTextNode('右クリックでコメント編集',x,y,3);
+
+[x,y]=ring(90,R1);           const bEdge=makeTextNode('🔗 エッジ',x,y,4);
+[x,y]=ring(90,R2);           const edgeA=makeTextNode('Ctrl+右クリックでノード同士を接続',x,y,4);
+
+[x,y]=ring(150,R1);          const bSearch=makeTextNode('🔍 検索・ジャンプ',x,y,5);
+[x,y]=ring(150-11,R2);       const searchA=makeTextNode('Ctrl+Fで検索',x,y,5);
+[x,y]=ring(150+11,R2);       const searchB=makeTextNode('Zキーで最初のノードへ',x,y,5);
+
+[x,y]=ring(-150,R1);         const bSave=makeTextNode('💾 保存・共有',x,y,6);
+[x,y]=ring(-150-11,R2);      const saveA=makeTextNode('Shift+Dで保存',x,y,6);
+[x,y]=ring(-150+11,R2);      const saveB=makeTextNode('Shift+Pで公開用HTML書き出し',x,y,6);
+
+edges.push(
+  {from:root.id,to:bOps.id},{from:bOps.id,to:opsA.id},{from:bOps.id,to:opsB.id},{from:bOps.id,to:opsC.id},
+  {from:root.id,to:bFmt.id},{from:bFmt.id,to:fmtA.id},{from:bFmt.id,to:fmtB.id},
+  {from:root.id,to:bImg.id},{from:bImg.id,to:imgA.id},{from:bImg.id,to:imgB.id},
+  {from:root.id,to:bEdge.id,label:'線を右クリックでコメント追加'},{from:bEdge.id,to:edgeA.id},
+  {from:root.id,to:bSearch.id},{from:bSearch.id,to:searchA.id},{from:bSearch.id,to:searchB.id},
+  {from:root.id,to:bSave.id},{from:bSave.id,to:saveA.id},{from:bSave.id,to:saveB.id}
+);
 renderEdges();pushHistory();
 {
   const youngest=nodes.reduce((min,n)=>n.id<min.id?n:min,nodes[0]);
