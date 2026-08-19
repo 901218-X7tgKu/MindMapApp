@@ -191,7 +191,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+右クリック×2: 接続 | Z: 最も若いIDのノードを中央へ | N/B: 次/前の接続グループの最若IDノードを中央へ | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.74</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.76</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -1505,6 +1505,7 @@ COLORS.forEach((_,i)=>{
 
 // ── Copy / Paste ──────────────────────────────────────────
 let copiedNode=null;          // deep copy of the copied node
+let copiedTree=null;          // deep copy of a node + its descendant subtree ({rootId, nodes, edges})
 let lastMousePos={x:0,y:0};  // track mouse position for paste location
 
 canvas.addEventListener('mousemove',e=>{
@@ -1595,7 +1596,23 @@ document.addEventListener('keydown',e=>{
     const src=nodes.find(n=>n.id===selected);
     if(!src)return;
     copiedNode=JSON.parse(JSON.stringify(src)); // deep copy
+    copiedTree=null; // a plain single-node copy supersedes any previously copied tree
     showToast('✓ ノードをコピーしました');
+    e.preventDefault();
+  }
+
+  // Shift+C: copy selected node together with its entire descendant subtree
+  if(e.shiftKey&&!e.ctrlKey&&!e.metaKey&&e.key==='C'){
+    if(selected===null)return;
+    const src=nodes.find(n=>n.id===selected);
+    if(!src)return;
+    const idSet=new Set(getAllDescendantIds(src.id));
+    idSet.add(src.id);
+    const treeNodes=nodes.filter(n=>idSet.has(n.id)).map(n=>JSON.parse(JSON.stringify(n)));
+    const treeEdges=edges.filter(ed=>idSet.has(ed.from)&&idSet.has(ed.to)).map(ed=>JSON.parse(JSON.stringify(ed)));
+    copiedTree={rootId:src.id,nodes:treeNodes,edges:treeEdges};
+    copiedNode=null; // a tree copy supersedes any previously copied single node
+    showToast(`✓ ノードツリーをコピーしました（${treeNodes.length}個）`);
     e.preventDefault();
   }
 
@@ -1685,6 +1702,19 @@ document.addEventListener('keydown',e=>{
       if(cur.type==='image')openImgModal(cur);
       else startInlineEdit(cur);
     }
+    return;
+  }
+
+  // Delete: remove the selected node only (same as Shift+right-click on a
+  // node). Any children become disconnected rather than being deleted too —
+  // use Ctrl+Shift+L to delete the node and all its descendants together.
+  if(e.key==='Delete'){
+    if(selected===null)return;
+    const cur=nodes.find(nd=>nd.id===selected);
+    if(!cur)return;
+    e.preventDefault();
+    deleteNode(cur);
+    showToast('✓ ノードを削除しました');
   }
 });
 
@@ -1709,22 +1739,54 @@ document.addEventListener('paste',e=>{
   }
 });
 
-// ── Ctrl+Shift+V: paste copied node ──────────────────────
+// ── Ctrl+Shift+V: paste copied node (or node tree) ────────
 document.addEventListener('keydown',e=>{
   if(e.target.tagName==='TEXTAREA'||e.target.tagName==='INPUT')return;
+  if(e.target.isContentEditable)return;
+  if(e.target.closest&&e.target.closest('.modal-overlay'))return; // let modals (img/edge) handle their own keys
   if((e.ctrlKey||e.metaKey)&&e.shiftKey&&e.key==='V'){
-    if(!copiedNode)return;
-    e.preventDefault();
-    const n=JSON.parse(JSON.stringify(copiedNode));
-    n.id=nodeId++;
-    n.isRoot=false;
-    n.x=lastMousePos.x+20;
-    n.y=lastMousePos.y+20;
-    nodes.push(n);
-    if(n.type==='image')createImgNodeEl(n);else createNodeEl(n);
-    selected=n.id;
-    pushHistory();renderAll();
-    showToast('✓ ノードを貼り付けました');
+    if(copiedTree){
+      e.preventDefault();
+      const rootOrig=copiedTree.nodes.find(n=>n.id===copiedTree.rootId);
+      const dx=(lastMousePos.x+20)-rootOrig.x, dy=(lastMousePos.y+20)-rootOrig.y;
+      const idMap=new Map();
+      const newNodes=copiedTree.nodes.map(orig=>{
+        const clone=JSON.parse(JSON.stringify(orig));
+        const newId=nodeId++;
+        idMap.set(orig.id,newId);
+        clone.id=newId;
+        clone.isRoot=false;
+        clone.x=orig.x+dx;
+        clone.y=orig.y+dy;
+        return clone;
+      });
+      const newEdges=copiedTree.edges.map(ed=>{
+        const ne={from:idMap.get(ed.from),to:idMap.get(ed.to)};
+        if(ed.label)ne.label=ed.label;
+        if(ed.style)ne.style=ed.style;
+        return ne;
+      });
+      newNodes.forEach(n=>{
+        nodes.push(n);
+        if(n.type==='image')createImgNodeEl(n);else createNodeEl(n);
+      });
+      edges.push(...newEdges);
+      selected=idMap.get(copiedTree.rootId);
+      pushHistory();renderAll();
+      showToast(`✓ ノードツリーを貼り付けました（${newNodes.length}個）`);
+    } else if(copiedNode){
+      e.preventDefault();
+      const n=JSON.parse(JSON.stringify(copiedNode));
+      n.id=nodeId++;
+      n.isRoot=false;
+      n.x=lastMousePos.x+20;
+      n.y=lastMousePos.y+20;
+      nodes.push(n);
+      if(n.type==='image')createImgNodeEl(n);else createNodeEl(n);
+      selected=n.id;
+      pushHistory();renderAll();
+      showToast('✓ ノードを貼り付けました');
+    }
   }
 });
 
