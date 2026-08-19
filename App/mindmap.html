@@ -62,7 +62,7 @@ html,body{height:100%;background:var(--color-background-secondary);color:var(--c
 #canvas.grabbing{cursor:grabbing}
 #canvas.connecting{cursor:crosshair}
 #canvas.dragover{outline:3px dashed var(--color-text-info);outline-offset:-4px;}
-svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+#svg-layer{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
 
 /* Text nodes */
 .node-el{position:absolute;transform:translate(-50%,-50%);cursor:pointer;z-index:10}
@@ -150,6 +150,10 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
 /* Edge comment modal */
 #edge-modal .edge-label-input{width:100%;font-family:var(--font-sans);font-size:13px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);padding:8px 10px;background:var(--color-background-secondary);color:var(--color-text-primary);outline:none}
 #edge-modal .edge-label-input:focus{border-color:var(--color-border-primary)}
+#edge-modal .edge-style-label{font-size:11px;color:var(--color-text-tertiary);margin-bottom:6px}
+#edge-modal .edge-style-row{display:flex;gap:6px;flex-wrap:wrap}
+#edge-modal .edge-style-opt{padding:7px 10px;color:var(--color-text-secondary)}
+#edge-modal .edge-style-opt.active{color:var(--color-text-info)}
 .edge-label{cursor:pointer;user-select:none}
 
 /* Search highlight */
@@ -187,7 +191,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+右クリック×2: 接続 | Z: 最も若いIDのノードを中央へ | N/B: 次/前の接続グループの最若IDノードを中央へ | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.72</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.74</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -287,7 +291,24 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
     <!-- Edge comment modal -->
     <div id="edge-modal" class="modal-overlay">
       <div class="modal-box" style="width:380px">
-        <h3>エッジのコメント</h3>
+        <h3>エッジの設定</h3>
+        <div>
+          <div class="edge-style-label">線の種類</div>
+          <div class="edge-style-row" id="edge-style-row">
+            <button type="button" class="edge-style-opt" data-style="arrow" title="実線＋矢印">
+              <svg width="40" height="14" viewBox="0 0 40 14"><line x1="2" y1="7" x2="30" y2="7" stroke="currentColor" stroke-width="2"/><path d="M28 3 L36 7 L28 11 Z" fill="currentColor"/></svg>
+            </button>
+            <button type="button" class="edge-style-opt" data-style="dashed-arrow" title="破線＋矢印">
+              <svg width="40" height="14" viewBox="0 0 40 14"><line x1="2" y1="7" x2="30" y2="7" stroke="currentColor" stroke-width="2" stroke-dasharray="5,4"/><path d="M28 3 L36 7 L28 11 Z" fill="currentColor"/></svg>
+            </button>
+            <button type="button" class="edge-style-opt" data-style="solid" title="実線（矢印なし）">
+              <svg width="40" height="14" viewBox="0 0 40 14"><line x1="2" y1="7" x2="38" y2="7" stroke="currentColor" stroke-width="2"/></svg>
+            </button>
+            <button type="button" class="edge-style-opt" data-style="dashed" title="破線（矢印なし）">
+              <svg width="40" height="14" viewBox="0 0 40 14"><line x1="2" y1="7" x2="38" y2="7" stroke="currentColor" stroke-width="2" stroke-dasharray="5,4"/></svg>
+            </button>
+          </div>
+        </div>
         <input id="edge-modal-input" class="edge-label-input" type="text" placeholder="接続線に添えるコメント（短文）" maxlength="60" autocomplete="off">
         <div class="modal-actions">
           <button id="edge-modal-save"><i class="ti ti-check"></i> 保存</button>
@@ -425,8 +446,15 @@ function serialize(){
     }
   });
   edges.forEach(e=>{
-    const line=`EDGE ${e.from} ${e.to}`;
-    lines.push(e.label?`${line} ${e.label.replace(/\n/g,'\\n')}`:line);
+    let line=`EDGE ${e.from} ${e.to}`;
+    const style=(e.style&&e.style!=='arrow')?e.style:null;
+    if(style){
+      line+=` ${style}`;
+      if(e.label)line+=` ${e.label.replace(/\n/g,'\\n')}`;
+    } else if(e.label){
+      line+=` ${e.label.replace(/\n/g,'\\n')}`;
+    }
+    lines.push(line);
   });
   if(collapsedNodes.size>0)lines.push(`COLLAPSED ${[...collapsedNodes].join(',')}`);
   lines.push(`META nodeId=${nodeId}`);
@@ -453,7 +481,16 @@ function deserialize(text){
       const m=line.match(/^EDGE (\d+) (\d+)(?: (.*))?$/);
       if(m){
         const ed={from:+m[1],to:+m[2]};
-        if(m[3])ed.label=m[3].replace(/\\n/g,'\n');
+        const STYLE_KEYWORDS=['dashed-arrow','solid','dashed'];
+        let rest=m[3]||'';
+        if(rest){
+          const parts=rest.split(' ');
+          if(STYLE_KEYWORDS.includes(parts[0])){
+            ed.style=parts[0];
+            rest=parts.slice(1).join(' ');
+          }
+          if(rest)ed.label=rest.replace(/\\n/g,'\n');
+        }
         es.push(ed);
       }
     } else if(line.startsWith('TITLE ')){
@@ -722,25 +759,32 @@ function renderEdges(){
     const a=nodes.find(n=>n.id===e.from),b=nodes.find(n=>n.id===e.to);
     if(!a||!b)return;
     if(!isNodeVisible(a.id)||!isNodeVisible(b.id))return;
+    const style=e.style||'arrow';
+    const hasArrow=(style==='arrow'||style==='dashed-arrow');
     const ax=a.x*scale+panX,ay=a.y*scale+panY,bx=b.x*scale+panX,by=b.y*scale+panY;
-    // Precise offset: parametric intersection of direction vector with node bounding rect
-    let offset=10;
+    // Precise offset: parametric intersection of direction vector with node bounding rect.
+    // Styles without an arrowhead need no clearance — they connect the node
+    // centers directly (the node boxes render on top and hide the overlap).
+    let ex=bx, ey=by;
     const bEl=document.getElementById('node-'+b.id);
     let bRect=null;
     if(bEl){
       const r=bEl.getBoundingClientRect();
       const hw=r.width/2+4, hh=r.height/2+4; // +4px clearance
       bRect={cx:bx,cy:by,hw,hh};
-      const dx=bx-ax, dy=by-ay;
-      if(Math.abs(dx)>0.001||Math.abs(dy)>0.001){
-        const tx=hw/Math.abs(dx), ty=hh/Math.abs(dy);
-        const t=Math.min(tx,ty);
-        offset=t*Math.sqrt(dx*dx+dy*dy);
+      if(hasArrow){
+        let offset=10;
+        const dx=bx-ax, dy=by-ay;
+        if(Math.abs(dx)>0.001||Math.abs(dy)>0.001){
+          const tx=hw/Math.abs(dx), ty=hh/Math.abs(dy);
+          const t=Math.min(tx,ty);
+          offset=t*Math.sqrt(dx*dx+dy*dy);
+        }
+        offset=Math.min(offset,Math.sqrt((bx-ax)**2+(by-ay)**2)*0.8);
+        const dist=Math.sqrt(dx*dx+dy*dy)||1;
+        ex=bx-(dx/dist)*offset; ey=by-(dy/dist)*offset;
       }
-      offset=Math.min(offset,Math.sqrt((bx-ax)**2+(by-ay)**2)*0.8);
     }
-    const dx=bx-ax,dy=by-ay,dist=Math.sqrt(dx*dx+dy*dy)||1;
-    const ex=bx-(dx/dist)*offset, ey=by-(dy/dist)*offset;
     const mx=(ax+ex)/2;
     const aEl=document.getElementById('node-'+a.id);
     let aRect=null;
@@ -749,15 +793,21 @@ function renderEdges(){
       aRect={cx:ax,cy:ay,hw:r.width/2+4,hh:r.height/2+4};
     }
     const dAttr=`M${ax} ${ay} Q${mx} ${ay} ${ex} ${ey}`;
+    const strokeW=1.5*scale;
+    const dashArr=(style==='dashed'||style==='dashed-arrow')?(5*scale)+','+(4*scale):null;
     const path=document.createElementNS('http://www.w3.org/2000/svg','path');
     path.setAttribute('d',dAttr);
     path.setAttribute('fill','none');
     path.setAttribute('stroke','var(--color-edge)');
-    path.setAttribute('stroke-width', String(1.5 * scale));
+    path.setAttribute('stroke-width', String(strokeW));
+    if(dashArr)path.setAttribute('stroke-dasharray',dashArr);
     path.setAttribute('class','edge');
     path.dataset.from=String(e.from);
     path.dataset.to=String(e.to);
-    path.setAttribute('marker-end','url(#arr)');
+    path.dataset.style=style;
+    path.dataset.baseWidth=String(strokeW);
+    path.dataset.arrow=hasArrow?'1':'0';
+    if(hasArrow)path.setAttribute('marker-end','url(#arr)');
     svgEl.appendChild(path);
     // Wide invisible hit-area on top of the thin visible line, so right-click
     // doesn't require pixel-precise aim on a 1.5px stroke.
@@ -801,7 +851,12 @@ function applyHoverHighlight(){
   document.querySelectorAll('.hover-self,.hover-parent,.hover-child').forEach(el=>{
     el.classList.remove('hover-self','hover-parent','hover-child');
   });
-  document.querySelectorAll('.edge.hover-edge').forEach(e=>{e.classList.remove('hover-edge');e.setAttribute('marker-end','url(#arr)');e.setAttribute('stroke-width',String(1.5*scale));});
+  document.querySelectorAll('.edge.hover-edge').forEach(p=>{
+    p.classList.remove('hover-edge');
+    const baseW=+p.dataset.baseWidth||1.5*scale;
+    p.setAttribute('stroke-width', String(baseW));
+    if(p.dataset.arrow==='1')p.setAttribute('marker-end','url(#arr)');
+  });
   // While a node is being dragged, its position updates one frame behind the
   // browser's mouse hit-test, which was causing hover-enter/leave to fire
   // repeatedly and the highlight to flicker on/off. Suppress it during drag.
@@ -827,8 +882,9 @@ function applyHoverHighlight(){
     const to=path.dataset.to;
     if(from===String(hoveredNodeId)||to===String(hoveredNodeId)){
       path.classList.add('hover-edge');
-      path.setAttribute('stroke-width', String(2.5 * scale));
-      path.setAttribute('marker-end','url(#arr-hover)');
+      const baseW=+path.dataset.baseWidth||1.5*scale;
+      path.setAttribute('stroke-width', String(baseW+1*scale));
+      if(path.dataset.arrow==='1')path.setAttribute('marker-end','url(#arr-hover)');
     }
   });
 }
@@ -1246,8 +1302,15 @@ imgModal.addEventListener('keydown',e=>{
 
 // ── Edge comment modal ────────────────────────────────────
 let editingEdge=null;
+let pendingEdgeStyle='arrow';
 const edgeModal=document.getElementById('edge-modal');
 const edgeModalInput=document.getElementById('edge-modal-input');
+const edgeStyleButtons=document.querySelectorAll('#edge-style-row .edge-style-opt');
+function setPendingEdgeStyle(style){
+  pendingEdgeStyle=style;
+  edgeStyleButtons.forEach(b=>b.classList.toggle('active',b.dataset.style===style));
+}
+edgeStyleButtons.forEach(b=>b.addEventListener('click',()=>setPendingEdgeStyle(b.dataset.style)));
 function onEdgeRightClick(e,ed){
   e.preventDefault();e.stopPropagation();
   openEdgeModal(ed);
@@ -1255,6 +1318,7 @@ function onEdgeRightClick(e,ed){
 function openEdgeModal(ed){
   editingEdge=ed;
   edgeModalInput.value=ed.label||'';
+  setPendingEdgeStyle(ed.style||'arrow');
   edgeModal.classList.remove('closing');
   edgeModal.classList.add('show');
   edgeModalInput.focus();
@@ -1264,6 +1328,7 @@ function saveEdgeModal(){
   if(!editingEdge)return;
   const val=edgeModalInput.value.trim();
   if(val)editingEdge.label=val;else delete editingEdge.label;
+  if(pendingEdgeStyle&&pendingEdgeStyle!=='arrow')editingEdge.style=pendingEdgeStyle;else delete editingEdge.style;
   closeOverlay(edgeModal);
   pushHistory();renderAll();
 }
@@ -1753,17 +1818,17 @@ function centerOnNode(nodeId, andRender=true){
 function jumpToDuplicateNode(n){
   const content=(n.type==='image'?(n.comment||''):(n.text||'')).trim();
   if(!content){showToast('⚠ ノードの内容が空です');return;}
-  const group=nodes.filter(nd=>(nd.type==='image'?(nd.comment||''):(nd.text||'')).trim()===content);
-  if(group.length<2){showToast('⚠ 同じ内容の他のノードはありません');return;}
+  const group=nodes.filter(nd=>nd.id!==n.id && (nd.type==='image'?(nd.comment||''):(nd.text||'')).trim()===content);
+  if(group.length===0){showToast('⚠ 同じ内容の他のノードはありません');return;}
   if(_dupJumpContent===content){
     _dupJumpIdx=(_dupJumpIdx+1)%group.length;
   } else {
     _dupJumpContent=content;
-    _dupJumpIdx=(group.findIndex(g=>g.id===n.id)+1)%group.length;
+    _dupJumpIdx=0;
   }
   const target=group[_dupJumpIdx];
   centerOnNode(target.id);
-  showToast(group.length>2?`🔎 同じ内容のノードへジャンプ (${_dupJumpIdx+1}/${group.length})`:'🔎 同じ内容のノードへジャンプしました');
+  showToast(group.length>1?`🔎 同じ内容のノードへジャンプ (${_dupJumpIdx+1}/${group.length})`:'🔎 同じ内容のノードへジャンプしました');
 }
 
 document.getElementById('search-input').addEventListener('input',function(){
@@ -1965,7 +2030,16 @@ function deserialize(text){
       const m=line.match(/^EDGE (\\d+) (\\d+)(?: (.*))?$/);
       if(m){
         const ed={from:+m[1],to:+m[2]};
-        if(m[3])ed.label=m[3].replace(/\\\\n/g,'\\n');
+        const STYLE_KEYWORDS=['dashed-arrow','solid','dashed'];
+        let rest=m[3]||'';
+        if(rest){
+          const parts=rest.split(' ');
+          if(STYLE_KEYWORDS.includes(parts[0])){
+            ed.style=parts[0];
+            rest=parts.slice(1).join(' ');
+          }
+          if(rest)ed.label=rest.replace(/\\\\n/g,'\\n');
+        }
         es.push(ed);
       }
     } else if(line.startsWith('META ')){
@@ -2011,7 +2085,12 @@ function applyHoverHighlight(){
   document.querySelectorAll('.hover-self,.hover-parent,.hover-child').forEach(el=>{
     el.classList.remove('hover-self','hover-parent','hover-child');
   });
-  document.querySelectorAll('.edge.hover-edge').forEach(e=>{e.classList.remove('hover-edge');e.setAttribute('marker-end','url(#arr)');e.setAttribute('stroke-width',String(1.5*scale));});
+  document.querySelectorAll('.edge.hover-edge').forEach(p=>{
+    p.classList.remove('hover-edge');
+    const baseW=+p.dataset.baseWidth||1.5*scale;
+    p.setAttribute('stroke-width',String(baseW));
+    if(p.dataset.arrow==='1')p.setAttribute('marker-end','url(#arr)');
+  });
   if(hoveredNodeId===null)return;
   const parentIds=new Set(edges.filter(e=>e.to===hoveredNodeId).map(e=>e.from));
   const childIds=new Set(edges.filter(e=>e.from===hoveredNodeId).map(e=>e.to));
@@ -2026,8 +2105,9 @@ function applyHoverHighlight(){
     const from=path.dataset.from;const to=path.dataset.to;
     if(from===String(hoveredNodeId)||to===String(hoveredNodeId)){
       path.classList.add('hover-edge');
-      path.setAttribute('stroke-width',String(2.5*scale));
-      path.setAttribute('marker-end','url(#arr-hover)');
+      const baseW=+path.dataset.baseWidth||1.5*scale;
+      path.setAttribute('stroke-width',String(baseW+1*scale));
+      if(path.dataset.arrow==='1')path.setAttribute('marker-end','url(#arr-hover)');
     }
   });
 }
@@ -2137,24 +2217,29 @@ function renderEdges(){
   edges.forEach(e=>{
     const a=nodes.find(n=>n.id===e.from),b=nodes.find(n=>n.id===e.to);
     if(!a||!b||!isVisible(a.id)||!isVisible(b.id))return;
+    const style=e.style||'arrow';
+    const hasArrow=(style==='arrow'||style==='dashed-arrow');
     const ax=a.x*scale+panX,ay=a.y*scale+panY,bx=b.x*scale+panX,by=b.y*scale+panY;
-    let offset=10;
+    let ex=bx,ey=by;
     const bEl=document.getElementById('node-'+b.id);
     let bRect=null;
     if(bEl){
       const r=bEl.getBoundingClientRect();
       const hw=r.width/2+4,hh=r.height/2+4;
       bRect={cx:bx,cy:by,hw:hw,hh:hh};
-      const dx=bx-ax,dy=by-ay;
-      if(Math.abs(dx)>0.001||Math.abs(dy)>0.001){
-        const tx=hw/Math.abs(dx),ty=hh/Math.abs(dy);
-        const t=Math.min(tx,ty);
-        offset=t*Math.sqrt(dx*dx+dy*dy);
+      if(hasArrow){
+        let offset=10;
+        const dx=bx-ax,dy=by-ay;
+        if(Math.abs(dx)>0.001||Math.abs(dy)>0.001){
+          const tx=hw/Math.abs(dx),ty=hh/Math.abs(dy);
+          const t=Math.min(tx,ty);
+          offset=t*Math.sqrt(dx*dx+dy*dy);
+        }
+        offset=Math.min(offset,Math.sqrt((bx-ax)**2+(by-ay)**2)*0.8);
+        const dist=Math.sqrt(dx*dx+dy*dy)||1;
+        ex=bx-(dx/dist)*offset;ey=by-(dy/dist)*offset;
       }
-      offset=Math.min(offset,Math.sqrt((bx-ax)**2+(by-ay)**2)*0.8);
     }
-    const dx=bx-ax,dy=by-ay,dist=Math.sqrt(dx*dx+dy*dy)||1;
-    const ex=bx-(dx/dist)*offset,ey=by-(dy/dist)*offset;
     const mx=(ax+ex)/2;
     const aEl=document.getElementById('node-'+a.id);
     let aRect=null;
@@ -2162,12 +2247,17 @@ function renderEdges(){
       const r=aEl.getBoundingClientRect();
       aRect={cx:ax,cy:ay,hw:r.width/2+4,hh:r.height/2+4};
     }
+    const strokeW=1.5*scale;
+    const dashArr=(style==='dashed'||style==='dashed-arrow')?(5*scale)+','+(4*scale):null;
     const path=document.createElementNS('http://www.w3.org/2000/svg','path');
     path.setAttribute('d','M'+ax+' '+ay+' Q'+mx+' '+ay+' '+ex+' '+ey);
     path.setAttribute('fill','none');path.setAttribute('stroke','var(--color-edge)');
-    path.setAttribute('stroke-width',String(1.5*scale));path.setAttribute('class','edge');
+    path.setAttribute('stroke-width',String(strokeW));path.setAttribute('class','edge');
+    if(dashArr)path.setAttribute('stroke-dasharray',dashArr);
     path.dataset.from=String(e.from);path.dataset.to=String(e.to);
-    path.setAttribute('marker-end','url(#arr)');
+    path.dataset.baseWidth=String(strokeW);
+    path.dataset.arrow=hasArrow?'1':'0';
+    if(hasArrow)path.setAttribute('marker-end','url(#arr)');
     svgEl.appendChild(path);
     if(e.label){
       const mp=edgeLabelPoint(ax,ay,mx,ay,ex,ey,aRect,bRect);
@@ -2250,17 +2340,17 @@ function showToast(msg){
 function jumpToDuplicateNode(n){
   const content=(n.type==='image'?(n.comment||''):(n.text||'')).trim();
   if(!content){showToast('⚠ ノードの内容が空です');return;}
-  const group=nodes.filter(nd=>(nd.type==='image'?(nd.comment||''):(nd.text||'')).trim()===content);
-  if(group.length<2){showToast('⚠ 同じ内容の他のノードはありません');return;}
+  const group=nodes.filter(nd=>nd.id!==n.id && (nd.type==='image'?(nd.comment||''):(nd.text||'')).trim()===content);
+  if(group.length===0){showToast('⚠ 同じ内容の他のノードはありません');return;}
   if(_dupJumpContent===content){
     _dupJumpIdx=(_dupJumpIdx+1)%group.length;
   } else {
     _dupJumpContent=content;
-    _dupJumpIdx=(group.findIndex(g=>g.id===n.id)+1)%group.length;
+    _dupJumpIdx=0;
   }
   const target=group[_dupJumpIdx];
   centerOn(target.id);
-  showToast(group.length>2?('🔎 同じ内容のノードへジャンプ ('+(_dupJumpIdx+1)+'/'+group.length+')'):'🔎 同じ内容のノードへジャンプしました');
+  showToast(group.length>1?('🔎 同じ内容のノードへジャンプ ('+(_dupJumpIdx+1)+'/'+group.length+')'):'🔎 同じ内容のノードへジャンプしました');
 }
 document.getElementById('search-input').addEventListener('input',function(){
   const q=this.value.trim();
@@ -2348,7 +2438,7 @@ html,body{height:100%;background:var(--color-background-secondary);color:var(--c
 #header h1{font-size:15px;font-weight:600;flex:1}
 #canvas{flex:1;position:relative;overflow:hidden;cursor:grab;user-select:none}
 #canvas.grabbing{cursor:grabbing}
-svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+#svg-layer{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
 .node-el{position:absolute;transform:translate(-50%,-50%);cursor:pointer;z-index:10}
 .node-el.spawn-in{animation:nodeSpawn .45s var(--ease-bounce) both}
 .img-node-el{position:absolute;transform:translate(-50%,-50%);z-index:10}
