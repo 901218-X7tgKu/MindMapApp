@@ -142,10 +142,31 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
 .modal-actions{display:flex;gap:8px;justify-content:flex-end}
 .modal-status{font-size:11px;color:var(--color-text-success);min-height:16px}
 
-/* Image comment modal */
-#img-modal .img-preview{width:100%;max-height:260px;object-fit:contain;border-radius:8px;border:0.5px solid var(--color-border-tertiary);background:var(--color-background-secondary)}
-#img-modal .comment-ta{width:100%;height:90px;font-family:var(--font-sans);font-size:13px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);padding:10px;background:var(--color-background-secondary);color:var(--color-text-primary);resize:vertical;outline:none}
-#img-modal .comment-ta:focus{border-color:var(--color-border-primary)}
+/* Node edit modal (text & image nodes) */
+#node-modal .img-preview{width:100%;max-height:320px;object-fit:contain;border-radius:8px;border:0.5px solid var(--color-border-tertiary);background:var(--color-background-secondary)}
+#node-modal .comment-ta{width:100%;height:150px;font-family:var(--font-sans);font-size:13px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);padding:10px;background:var(--color-background-secondary);color:var(--color-text-primary);resize:vertical;outline:none}
+#node-modal .comment-ta:focus{border-color:var(--color-border-primary)}
+#node-modal .attr-input{width:100%;font-size:13px;padding:8px 10px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);outline:none;font-family:var(--font-sans)}
+#node-modal .attr-input:focus{border-color:var(--color-border-primary)}
+#node-modal .attr-label{font-size:12px;margin-top:2px;display:flex;align-items:baseline;gap:6px}
+#node-modal .attr-label .hint{font-size:11px;color:var(--color-text-tertiary);font-weight:400}
+#node-modal .node-modal-columns{display:flex;gap:28px;align-items:flex-start}
+#node-modal .node-modal-col{display:flex;flex-direction:column;gap:6px;min-width:0;flex:1 1 auto}
+#node-modal .node-modal-col-attrs .attr-label:first-child{margin-top:0}
+@media (max-width:760px){
+  #node-modal .node-modal-columns{flex-direction:column}
+  #node-modal .node-modal-col-attrs{flex:1 1 auto!important;width:100%!important}
+}
+
+/* Public HTML: read-only attribute view modal */
+.attr-modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center}
+.attr-modal-overlay.show{display:flex;animation:overlayIn .25s var(--ease-out) both}
+.attr-modal-box{background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-lg);padding:20px;width:320px;max-width:90vw;display:flex;flex-direction:column;gap:4px;box-shadow:0 24px 60px rgba(0,0,0,.25)}
+.attr-modal-box h3{font-size:14px;font-weight:600;margin-bottom:6px}
+.attr-tag-chip{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);margin:2px 4px 2px 0}
+.attr-status-chip{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;background:var(--color-background-info,rgba(33,150,243,.12));border:0.5px solid var(--color-border-secondary)}
+.attr-empty{color:var(--color-text-tertiary);font-size:12px;font-style:italic}
+.attr-modal-actions{display:flex;justify-content:flex-end;margin-top:10px}
 
 /* Edge comment modal */
 #edge-modal .edge-label-input{width:100%;font-family:var(--font-sans);font-size:13px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);padding:8px 10px;background:var(--color-background-secondary);color:var(--color-text-primary);outline:none}
@@ -190,8 +211,8 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
 <div id="app">
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
-    <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+右クリック×2: 接続 | Z: 最も若いIDのノードを中央へ | N/B: 次/前の接続グループの最若IDノードを中央へ | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v1.76</span>
+    <span style="font-size:11px;color:var(--color-text-tertiary)">クリック: 展開/折り畳み | 右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+クリック×2: 接続 | Ctrl+右クリック: 属性編集(URL/タグ/ステータス) | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | N/B: 次/前の接続グループの最若IDノードを中央へ | WASD: スクロール </span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.00</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -269,21 +290,33 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
       </div>
     </div>
 
-    <!-- Image comment modal -->
-    <div id="img-modal" class="modal-overlay">
-      <div class="modal-box" style="width:480px">
-        <h3>画像ノードの編集</h3>
-        <img id="img-modal-preview" class="img-preview" src="" alt="preview">
-        <div style="display:flex;align-items:center;gap:12px;margin-top:4px">
-          <p style="white-space:nowrap;margin:0">表示サイズ</p>
-          <input type="range" id="img-modal-width" min="80" max="1000" step="10" value="180" style="flex:1;accent-color:var(--color-text-info)">
-          <span id="img-modal-width-label" style="font-size:12px;color:var(--color-text-secondary);white-space:nowrap;min-width:44px;text-align:right">180 px</span>
+    <!-- Node edit modal (text & image nodes) -->
+    <div id="node-modal" class="modal-overlay">
+      <div class="modal-box" id="node-modal-box" style="width:480px">
+        <h3 id="node-modal-title">ノードの編集</h3>
+        <div class="node-modal-columns">
+          <div class="node-modal-col node-modal-col-media" id="node-modal-col-media">
+            <img id="node-modal-preview" class="img-preview" src="" alt="preview" style="display:none">
+            <div id="node-modal-size-row" style="display:none;align-items:center;gap:12px">
+              <p style="white-space:nowrap;margin:0">表示サイズ</p>
+              <input type="range" id="node-modal-width" min="80" max="1000" step="10" value="180" style="flex:1;accent-color:var(--color-text-info)">
+              <span id="node-modal-width-label" style="font-size:12px;color:var(--color-text-secondary);white-space:nowrap;min-width:44px;text-align:right">180 px</span>
+            </div>
+            <p id="node-modal-text-label" style="margin-top:4px">テキスト</p>
+            <textarea id="node-modal-text" class="comment-ta" placeholder="ノードのテキストを入力..."></textarea>
+          </div>
+          <div class="node-modal-col node-modal-col-attrs" id="node-modal-col-attrs">
+            <p class="attr-label"><span>URL</span><span class="hint">Ctrl+Shift+右クリックで開く／未設定なら反応しません</span></p>
+            <input type="text" id="node-modal-url" class="attr-input" placeholder="https://example.com または ./page.html" autocomplete="off">
+            <p class="attr-label"><span>タグ</span><span class="hint">複数可・#で区切る（例: #タグA#タグB）</span></p>
+            <input type="text" id="node-modal-tags" class="attr-input" placeholder="#タグA#タグB#タグC" autocomplete="off">
+            <p class="attr-label"><span>ステータス</span><span class="hint">1つのみ設定可</span></p>
+            <input type="text" id="node-modal-status" class="attr-input" placeholder="例: 完了" autocomplete="off">
+          </div>
         </div>
-        <p style="margin-top:4px">コメント</p>
-        <textarea id="img-modal-comment" class="comment-ta" placeholder="この画像へのコメントを入力..."></textarea>
         <div class="modal-actions">
-          <button id="img-modal-save"><i class="ti ti-check"></i> 保存</button>
-          <button id="img-modal-cancel">キャンセル</button>
+          <button id="node-modal-save"><i class="ti ti-check"></i> 保存</button>
+          <button id="node-modal-cancel">キャンセル</button>
         </div>
       </div>
     </div>
@@ -445,6 +478,12 @@ function serialize(){
       lines.push(`NODE ${n.id} ${n.colorIdx} ${n.isRoot?1:0} ${Math.round(n.x)} ${Math.round(n.y)} ${safeText}`);
     }
   });
+  nodes.forEach(n=>{
+    const url=n.url||'', tags=n.tags||[], status=n.status||'';
+    if(url||tags.length||status){
+      lines.push(`ATTR ${n.id} ${encodeURIComponent(url)}|${encodeURIComponent(tags.join(','))}|${encodeURIComponent(status)}`);
+    }
+  });
   edges.forEach(e=>{
     let line=`EDGE ${e.from} ${e.to}`;
     const style=(e.style&&e.style!=='arrow')?e.style:null;
@@ -464,6 +503,7 @@ function deserialize(text){
   const lines=text.trim().split('\n');
   if(!lines[0].startsWith('MINDMAP'))return null;
   const ns=[],es=[];let nid=0;
+  const attrsMap={};
   for(const line of lines){
     if(line.startsWith('NODE ')){
       const m=line.match(/^NODE (\d+) (\d+) ([01]) (-?\d+) (-?\d+) (.+)$/);
@@ -477,6 +517,16 @@ function deserialize(text){
       const comment=(sep>=0?payload.slice(0,sep):'').replace(/\\n/g,'\n');
       const src=sep>=0?payload.slice(sep+2):'';
       ns.push({id,type:'image',x,y,src,comment,width});
+    } else if(line.startsWith('ATTR ')){
+      const m=line.match(/^ATTR (\d+) (.*)$/);
+      if(m){
+        const parts=m[2].split('|');
+        attrsMap[+m[1]]={
+          url:decodeURIComponent(parts[0]||''),
+          tags:decodeURIComponent(parts[1]||'').split(',').filter(Boolean),
+          status:decodeURIComponent(parts[2]||'')
+        };
+      }
     } else if(line.startsWith('EDGE ')){
       const m=line.match(/^EDGE (\d+) (\d+)(?: (.*))?$/);
       if(m){
@@ -502,6 +552,12 @@ function deserialize(text){
       const mo=line.match(/nodeId=(\d+)/);if(mo)nid=+mo[1];
     }
   }
+  ns.forEach(n=>{
+    const a=attrsMap[n.id];
+    n.url=a?a.url:'';
+    n.tags=a?a.tags:[];
+    n.status=a?a.status:'';
+  });
   return {nodes:ns,edges:es,nodeId:nid};
 }
 
@@ -890,12 +946,20 @@ function applyHoverHighlight(){
 }
 
 function makeTextNode(text,x,y,colorIdx=0,isRoot=false){
-  const n={id:nodeId++,type:'text',text,x,y,colorIdx,isRoot};
+  const n={id:nodeId++,type:'text',text,x,y,colorIdx,isRoot,url:'',tags:[],status:''};
   nodes.push(n);createNodeEl(n);renderNode(n);renderEdges();return n;
 }
 function makeImgNode(src,x,y,comment='',width=0){
-  const n={id:nodeId++,type:'image',src,x,y,comment,width,naturalW:0,naturalH:0};
+  const n={id:nodeId++,type:'image',src,x,y,comment,width,naturalW:0,naturalH:0,url:'',tags:[],status:''};
   nodes.push(n);createImgNodeEl(n);renderNode(n);renderEdges();return n;
+}
+// ── Tag parsing helpers ────────────────────────────────────
+// "#タグA#タグB#タグC" -> ['タグA','タグB','タグC']
+function parseTagsInput(str){
+  return (str||'').split('#').map(t=>t.trim()).filter(Boolean);
+}
+function tagsToInputString(tags){
+  return (tags&&tags.length)?('#'+tags.join('#')):'';
 }
 
 // ── Child-node placement (used by Ctrl+Enter) ─────────────
@@ -998,10 +1062,12 @@ function onNodeClick(e,n){
     return;
   }
   if((e.ctrlKey||e.metaKey)&&!e.shiftKey){
-    toggleCollapse(n);
+    ctrlConnectNode(n);
     return;
   }
-  selected=n.id;renderAll();
+  // 左クリックのみ：選択 + 展開/折り畳みの切り替え（子ノードがない場合は選択のみ）
+  selected=n.id;
+  if(hasChildren(n.id))toggleCollapse(n);else renderAll();
 }
 function deleteNode(n){
   nodes=nodes.filter(nd=>nd.id!==n.id);
@@ -1039,6 +1105,7 @@ function deleteNodeWithDescendants(n){
   pushHistory();renderEdges();
 }
 function startInlineEdit(n){
+  if(n.type!=='text')return; // 画像ノードはモーダル編集のみ
   if(editingNodeId===n.id)return;
   editingNodeId=n.id;
   selected=n.id;
@@ -1178,19 +1245,21 @@ function wouldCreateCycle(fromId, toId){
 }
 
 function openNodeLink(n){
-  const text=(n.type==='image'?(n.comment||''):(n.text||'')).trim();
-  if(!text){showToast('⚠ ノードにテキストがありません');return;}
+  // v2.00〜: リンク先はノードのURL属性のみを参照する。
+  // URL属性が未設定のノードは何も起こらない（旧: ノード本文をそのままリンクとして開く機能は廃止）。
+  const url=(n.url||'').trim();
+  if(!url)return;
 
   // 絶対URLの場合はそのまま開く
-  if(/^https?:\/\//i.test(text)||/^[a-z][a-z0-9+\-.]*:\/\//i.test(text)){
-    window.open(text,'_blank','noopener,noreferrer');
+  if(/^https?:\/\//i.test(url)||/^[a-z][a-z0-9+\-.]*:\/\//i.test(url)){
+    window.open(url,'_blank','noopener,noreferrer');
     return;
   }
 
   // 相対パスとして解決を試みる
   let resolvedUrl=null;
   try{
-    resolvedUrl=new URL(text,window.location.href).href;
+    resolvedUrl=new URL(url,window.location.href).href;
   }catch(err){
     resolvedUrl=null;
   }
@@ -1205,7 +1274,7 @@ function openNodeLink(n){
         } else {
           // 存在しない → 絶対パスとしてそのまま試す
           showToast('⚠ 相対パスで見つからず絶対パスで開きます');
-          window.open(text,'_blank','noopener,noreferrer');
+          window.open(url,'_blank','noopener,noreferrer');
         }
       })
       .catch(()=>{
@@ -1214,14 +1283,14 @@ function openNodeLink(n){
       });
   } else {
     // URL解決に失敗 → そのまま開く
-    window.open(text,'_blank','noopener,noreferrer');
+    window.open(url,'_blank','noopener,noreferrer');
   }
 }
 function ctrlConnectNode(n){
   if(ctrlConnectPending===null){
     ctrlConnectPending=n.id;
     renderAll();
-    showToast('もう一方のノードをCtrl+右クリック');
+    showToast('もう一方のノードをCtrl+クリック');
   } else if(ctrlConnectPending!==n.id){
     const existsIdx=edges.findIndex(ed=>(ed.from===ctrlConnectPending&&ed.to===n.id)||(ed.from===n.id&&ed.to===ctrlConnectPending));
     if(existsIdx>=0){
@@ -1242,62 +1311,100 @@ function onNodeRightClick(e,n){
   e.preventDefault();e.stopPropagation();
   if((e.ctrlKey||e.metaKey)&&e.shiftKey){openNodeLink(n);return;}
   if(e.shiftKey){deleteNode(n);return;}
-  if(e.ctrlKey||e.metaKey){ctrlConnectNode(n);return;}
+  if(e.ctrlKey||e.metaKey){openNodeModal(n);return;}
   startInlineEdit(n);
 }
 function onImgNodeRightClick(e,n){
   e.preventDefault();e.stopPropagation();
   if((e.ctrlKey||e.metaKey)&&e.shiftKey){openNodeLink(n);return;}
   if(e.shiftKey){deleteNode(n);return;}
-  if(e.ctrlKey||e.metaKey){ctrlConnectNode(n);return;}
-  selected=n.id;renderAll();openImgModal(n);
+  // 画像ノードにはインライン編集がないため、通常の右クリックとCtrl+右クリックの
+  // どちらも同じ編集モーダル（コメント・サイズ・URL・タグ・ステータス）を開く。
+  openNodeModal(n);
 }
 
-// ── Image comment modal ───────────────────────────────────
-let editingImgNode=null;
-const imgModal=document.getElementById('img-modal');
-const imgModalPreview=document.getElementById('img-modal-preview');
-const imgModalComment=document.getElementById('img-modal-comment');
-function openImgModal(n){
-  editingImgNode=n;
-  imgModalPreview.src=n.src;
-  imgModalComment.value=n.comment||'';
-  const w=n.width||180;
-  const slider=document.getElementById('img-modal-width');
-  slider.value=w;
-  document.getElementById('img-modal-width-label').textContent=w+' px';
-  imgModal.classList.remove('closing');
-  imgModal.classList.add('show');
-  imgModalComment.focus();
+// ── Node edit modal (text & image nodes; text/comment + URL + tags + status) ──
+let editingNode=null;
+const nodeModal=document.getElementById('node-modal');
+const nodeModalBox=document.getElementById('node-modal-box');
+const nodeModalTitle=document.getElementById('node-modal-title');
+const nodeModalColMedia=document.getElementById('node-modal-col-media');
+const nodeModalColAttrs=document.getElementById('node-modal-col-attrs');
+const nodeModalPreview=document.getElementById('node-modal-preview');
+const nodeModalSizeRow=document.getElementById('node-modal-size-row');
+const nodeModalWidth=document.getElementById('node-modal-width');
+const nodeModalWidthLabel=document.getElementById('node-modal-width-label');
+const nodeModalTextLabel=document.getElementById('node-modal-text-label');
+const nodeModalText=document.getElementById('node-modal-text');
+const nodeModalUrl=document.getElementById('node-modal-url');
+const nodeModalTags=document.getElementById('node-modal-tags');
+const nodeModalStatus=document.getElementById('node-modal-status');
+function openNodeModal(n){
+  editingNode=n;
+  selected=n.id;renderAll();
+  const isImg=n.type==='image';
+  nodeModalTitle.textContent=isImg?'画像ノードの編集':'ノードの属性編集';
+  // 画像ノード：左＝画像/サイズ/コメント、右＝URL/タグ/ステータス の2カラム表示。
+  // テキストノード：本文はインライン編集のため、属性のみの1カラム表示。
+  nodeModalBox.style.width=isImg?'920px':'460px';
+  nodeModalColMedia.style.display=isImg?'flex':'none';
+  nodeModalColAttrs.style.flex=isImg?'0 0 360px':'1 1 auto';
+  nodeModalColAttrs.style.width=isImg?'360px':'100%';
+  nodeModalPreview.style.display=isImg?'block':'none';
+  nodeModalSizeRow.style.display=isImg?'flex':'none';
+  nodeModalTextLabel.style.display=isImg?'block':'none';
+  nodeModalText.style.display=isImg?'block':'none';
+  if(isImg){
+    nodeModalTextLabel.textContent='コメント';
+    nodeModalText.placeholder='この画像へのコメントを入力...';
+    nodeModalPreview.src=n.src;
+    const w=n.width||180;
+    nodeModalWidth.value=w;
+    nodeModalWidthLabel.textContent=w+' px';
+    nodeModalText.value=n.comment||'';
+  }
+  nodeModalUrl.value=n.url||'';
+  nodeModalTags.value=tagsToInputString(n.tags);
+  nodeModalStatus.value=n.status||'';
+  nodeModal.classList.remove('closing');
+  nodeModal.classList.add('show');
+  (isImg?nodeModalText:nodeModalUrl).focus();
 }
-// live preview of slider
-document.getElementById('img-modal-width').addEventListener('input',function(){
+// live preview of image size slider
+nodeModalWidth.addEventListener('input',function(){
   const w=+this.value;
-  document.getElementById('img-modal-width-label').textContent=w+' px';
-  if(editingImgNode){
-    editingImgNode.width=w;
-    if(editingImgNode.naturalW&&editingImgNode.naturalH){
-      editingImgNode.height=Math.round(w*editingImgNode.naturalH/editingImgNode.naturalW);
+  nodeModalWidthLabel.textContent=w+' px';
+  if(editingNode&&editingNode.type==='image'){
+    editingNode.width=w;
+    if(editingNode.naturalW&&editingNode.naturalH){
+      editingNode.height=Math.round(w*editingNode.naturalH/editingNode.naturalW);
     }
     renderAll();
   }
 });
-function saveImgModal(){
-  if(!editingImgNode)return;
-  editingImgNode.comment=imgModalComment.value;
-  editingImgNode.width=+document.getElementById('img-modal-width').value;
-  closeOverlay(imgModal);
+function saveNodeModal(){
+  if(!editingNode)return;
+  const n=editingNode;
+  if(n.type==='image'){
+    n.comment=nodeModalText.value;
+    n.width=+nodeModalWidth.value;
+  }
+  // テキストノードの本文はこのモーダルでは編集しない（インライン編集で対応）
+  n.url=nodeModalUrl.value.trim();
+  n.tags=parseTagsInput(nodeModalTags.value);
+  n.status=nodeModalStatus.value.trim();
+  closeOverlay(nodeModal);
   pushHistory();renderAll();
 }
-document.getElementById('img-modal-save').addEventListener('click',saveImgModal);
-document.getElementById('img-modal-cancel').addEventListener('click',()=>closeOverlay(imgModal));
-imgModal.addEventListener('click',e=>{if(e.target===imgModal)closeOverlay(imgModal);});
+document.getElementById('node-modal-save').addEventListener('click',saveNodeModal);
+document.getElementById('node-modal-cancel').addEventListener('click',()=>closeOverlay(nodeModal));
+nodeModal.addEventListener('click',e=>{if(e.target===nodeModal)closeOverlay(nodeModal);});
 // Shift+Enter to save / Escape to cancel — works no matter which element
-// inside the modal currently has focus (textarea, slider, or a button
-// reached via Tab), matching the behaviour of inline node text editing.
-imgModal.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){e.preventDefault();e.stopPropagation();closeOverlay(imgModal);}
-  else if(e.key==='Enter'&&e.shiftKey){e.preventDefault();e.stopPropagation();saveImgModal();}
+// inside the modal currently has focus (textarea, inputs, slider, or a
+// button reached via Tab), matching the behaviour of the former image modal.
+nodeModal.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){e.preventDefault();e.stopPropagation();closeOverlay(nodeModal);}
+  else if(e.key==='Enter'&&e.shiftKey){e.preventDefault();e.stopPropagation();saveNodeModal();}
 });
 
 // ── Edge comment modal ────────────────────────────────────
@@ -1682,7 +1789,7 @@ document.addEventListener('keydown',e=>{
     const ctrl=e.ctrlKey||e.metaKey;
     e.preventDefault();
     if(ctrl&&e.shiftKey){
-      // Ctrl+Shift+Enter: open node content as a link
+      // Ctrl+Shift+Enter: open the node's URL attribute (no-op if unset)
       openNodeLink(cur);
     } else if(e.shiftKey){
       // Shift+Enter: jump to another node with identical content
@@ -1699,7 +1806,8 @@ document.addEventListener('keydown',e=>{
       setTimeout(()=>startInlineEdit(n),0);
     } else {
       // Enter: start editing the selected node
-      if(cur.type==='image')openImgModal(cur);
+      // — text nodes: inline edit; image nodes: attribute/comment modal
+      if(cur.type==='image')openNodeModal(cur);
       else startInlineEdit(cur);
     }
     return;
@@ -1798,8 +1906,11 @@ let searchIdx=0;        // current result index
 function nodeMatchesQuery(n, q){
   if(!q)return false;
   const lower=q.toLowerCase();
-  if(n.type==='image') return (n.comment||'').toLowerCase().includes(lower);
-  return (n.text||'').toLowerCase().includes(lower);
+  const content=n.type==='image'?(n.comment||''):(n.text||'');
+  if(content.toLowerCase().includes(lower))return true;
+  if((n.status||'').toLowerCase().includes(lower))return true;
+  if(n.tags&&n.tags.some(t=>t.toLowerCase().includes(lower)))return true;
+  return false;
 }
 
 function getSearchState(nodeId){
@@ -2077,6 +2188,7 @@ function deserialize(text){
   const lines=text.trim().split('\\n');
   if(!lines[0].startsWith('MINDMAP'))return null;
   const ns=[],es=[];let nid=0;
+  const attrsMap={};
   for(const line of lines){
     if(line.startsWith('NODE ')){
       const m=line.match(/^NODE (\\d+) (\\d+) ([01]) (-?\\d+) (-?\\d+) (.+)$/);
@@ -2088,6 +2200,16 @@ function deserialize(text){
       const comment=(sep>=0?payload.slice(0,sep):'').replace(/\\\\n/g,'\\n');
       const src=sep>=0?payload.slice(sep+2):'';
       ns.push({id,type:'image',x,y,src,comment,width,naturalW:0,naturalH:0});
+    } else if(line.startsWith('ATTR ')){
+      const m=line.match(/^ATTR (\\d+) (.*)$/);
+      if(m){
+        const parts=m[2].split('|');
+        attrsMap[+m[1]]={
+          url:decodeURIComponent(parts[0]||''),
+          tags:decodeURIComponent(parts[1]||'').split(',').filter(Boolean),
+          status:decodeURIComponent(parts[2]||'')
+        };
+      }
     } else if(line.startsWith('EDGE ')){
       const m=line.match(/^EDGE (\\d+) (\\d+)(?: (.*))?$/);
       if(m){
@@ -2111,6 +2233,12 @@ function deserialize(text){
       ns._collapsed=ids;
     }
   }
+  ns.forEach(n=>{
+    const a=attrsMap[n.id];
+    n.url=a?a.url:'';
+    n.tags=a?a.tags:[];
+    n.status=a?a.status:'';
+  });
   return {nodes:ns,edges:es,nodeId:nid};
 }
 
@@ -2174,6 +2302,39 @@ function applyHoverHighlight(){
   });
 }
 
+function openNodeUrl(n){
+  const url=(n.url||'').trim();
+  if(!url)return; // URL属性が未設定のノードは無反応
+  const isAbs=new RegExp('^[a-z][a-z0-9+.-]*://','i').test(url);
+  if(isAbs){
+    window.open(url,'_blank','noopener,noreferrer');
+    return;
+  }
+  let resolvedUrl=null;
+  try{ resolvedUrl=new URL(url,window.location.href).href; }catch(err){ resolvedUrl=null; }
+  if(resolvedUrl){
+    fetch(resolvedUrl,{method:'HEAD'}).then(res=>{
+      if(res.ok){ window.open(resolvedUrl,'_blank','noopener,noreferrer'); }
+      else { showToast('⚠ 相対パスで見つからず絶対パスで開きます'); window.open(url,'_blank','noopener,noreferrer'); }
+    }).catch(()=>{ window.open(resolvedUrl,'_blank','noopener,noreferrer'); });
+  } else {
+    window.open(url,'_blank','noopener,noreferrer');
+  }
+}
+function openAttrModal(n){
+  const tags=n.tags||[];
+  const status=n.status||'';
+  const tagsHtml=tags.length?tags.map(t=>'<span class="attr-tag-chip">#'+escHtml(t)+'</span>').join(''):'<span class="attr-empty">タグなし</span>';
+  const statusHtml=status?('<span class="attr-status-chip">'+escHtml(status)+'</span>'):'<span class="attr-empty">ステータスなし</span>';
+  document.getElementById('attr-modal-tags').innerHTML='<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:4px">タグ</div>'+tagsHtml;
+  document.getElementById('attr-modal-status').innerHTML='<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:4px;margin-top:8px">ステータス</div>'+statusHtml;
+  document.getElementById('attr-modal').classList.add('show');
+}
+function closeAttrModal(){document.getElementById('attr-modal').classList.remove('show');}
+document.getElementById('attr-modal-close').addEventListener('click',closeAttrModal);
+document.getElementById('attr-modal').addEventListener('click',e=>{if(e.target.id==='attr-modal')closeAttrModal();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeAttrModal();});
+
 function renderAll(){
   nodes.forEach(n=>{
     let el=document.getElementById('node-'+n.id);
@@ -2193,8 +2354,8 @@ function renderAll(){
         });
         el.addEventListener('contextmenu',e=>{
           e.preventDefault();e.stopPropagation();
-          const t=(n.text||'').trim();
-          if(t)window.open(t,'_blank','noopener,noreferrer');
+          if((e.ctrlKey||e.metaKey)&&e.shiftKey){openNodeUrl(n);return;}
+          openAttrModal(n);
         });
         el.addEventListener('mouseenter',()=>{hoveredNodeId=n.id;applyHoverHighlight();});
         el.addEventListener('mouseleave',()=>{hoveredNodeId=null;applyHoverHighlight();});
@@ -2208,8 +2369,8 @@ function renderAll(){
         });
         el.addEventListener('contextmenu',e=>{
           e.preventDefault();e.stopPropagation();
-          const t=(n.comment||'').trim();
-          if(t)window.open(t,'_blank','noopener,noreferrer');
+          if((e.ctrlKey||e.metaKey)&&e.shiftKey){openNodeUrl(n);return;}
+          openAttrModal(n);
         });
         el.addEventListener('mouseenter',()=>{hoveredNodeId=n.id;applyHoverHighlight();});
         el.addEventListener('mouseleave',()=>{hoveredNodeId=null;applyHoverHighlight();});
@@ -2362,9 +2523,16 @@ canvas.addEventListener('contextmenu',e=>e.preventDefault());
 
 // Search
 let sResults=[],sIdx=0;
+function nodeMatchesQueryPublic(n,q){
+  const lower=q.toLowerCase();
+  const content=n.type==='image'?(n.comment||''):(n.text||'');
+  if(content.toLowerCase().includes(lower))return true;
+  if((n.status||'').toLowerCase().includes(lower))return true;
+  if(n.tags&&n.tags.some(t=>t.toLowerCase().includes(lower)))return true;
+  return false;
+}
 function doSearch(q){
-  sResults=nodes.filter(n=>isVisible(n.id)&&(n.text||'').toLowerCase().includes(q.toLowerCase())
-    ||(n.comment||'').toLowerCase().includes(q.toLowerCase())).map(n=>n.id);
+  sResults=nodes.filter(n=>isVisible(n.id)&&nodeMatchesQueryPublic(n,q)).map(n=>n.id);
   sIdx=0;updateSearchUI();if(sResults.length>0)centerOn(sResults[0],false);renderAll();applySHL();
 }
 function applySHL(){
@@ -2542,13 +2710,22 @@ button:disabled{opacity:.35;cursor:not-allowed}
 #toast.show::after{transition:transform 2.2s linear;transform:scaleX(0)}
 #search-input{font-size:12px;padding:4px 8px 4px 24px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);outline:none;width:140px;font-family:var(--font-sans)}
 #hint{font-size:11px;color:var(--color-text-tertiary);margin-left:auto}
+@keyframes overlayIn{from{opacity:0}to{opacity:1}}
+.attr-modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center}
+.attr-modal-overlay.show{display:flex;animation:overlayIn .25s var(--ease-out) both}
+.attr-modal-box{background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-lg);padding:20px;width:320px;max-width:90vw;display:flex;flex-direction:column;gap:4px;box-shadow:0 24px 60px rgba(0,0,0,.25)}
+.attr-modal-box h3{font-size:14px;font-weight:600;margin-bottom:6px}
+.attr-tag-chip{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);margin:2px 4px 2px 0}
+.attr-status-chip{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;background:rgba(33,150,243,.12);border:0.5px solid var(--color-border-secondary)}
+.attr-empty{color:var(--color-text-tertiary);font-size:12px;font-style:italic}
+.attr-modal-actions{display:flex;justify-content:flex-end;margin-top:10px}
 </style>
 </head>
 <body>
 <div id="app">
   <div id="header">
     <h1>🗺 ${escHtmlStr(title)}</h1>
-    <span style="font-size:11px;color:var(--color-text-tertiary)">クリック: 展開/折り畳み | ホイール: ズーム | ドラッグ: 移動 | Shift+Q: 全展開 | Shift+W: 全折り畳み | WASD: スクロール | Z: 最も若いIDのノードを中央へ | Ctrl+Shift+クリック: 同じ内容のノードへジャンプ</span>
+    <span style="font-size:11px;color:var(--color-text-tertiary)">クリック: 展開/折り畳み | 右クリック: タグ・ステータスを確認 | Ctrl+Shift+右クリック: URLを開く | ホイール: ズーム | ドラッグ: 移動 | Shift+Q: 全展開 | Shift+W: 全折り畳み | WASD: スクロール | Z: 最も若いIDのノードを中央へ | Ctrl+Shift+クリック: 同じ内容のノードへジャンプ</span>
     <button id="btn-theme" style="margin-left:8px;padding:4px 10px"><i id="theme-icon" class="ti ti-moon"></i> <span id="theme-label">ダーク</span></button>
   </div>
   <div id="canvas">
@@ -2564,6 +2741,15 @@ button:disabled{opacity:.35;cursor:not-allowed}
     </svg>
     <div id="nodes-layer"></div>
     <div id="toast"></div>
+    <!-- Read-only tag/status view (right-click on a node) -->
+    <div id="attr-modal" class="attr-modal-overlay">
+      <div class="attr-modal-box">
+        <h3>ノード情報</h3>
+        <div id="attr-modal-tags"></div>
+        <div id="attr-modal-status"></div>
+        <div class="attr-modal-actions"><button id="attr-modal-close">閉じる</button></div>
+      </div>
+    </div>
   </div>
   <div id="toolbar">
     <div style="position:relative;display:flex;align-items:center">
@@ -2703,7 +2889,7 @@ let [x,y]=ring(-90,R1);      const bOps=makeTextNode('🖱️ ノード操作',x
 [x,y]=ring(30+11,R2);        const imgB=makeTextNode('右クリックでコメント編集',x,y,3);
 
 [x,y]=ring(90,R1);           const bEdge=makeTextNode('🔗 エッジ',x,y,4);
-[x,y]=ring(90,R2);           const edgeA=makeTextNode('Ctrl+右クリックでノード同士を接続',x,y,4);
+[x,y]=ring(90,R2);           const edgeA=makeTextNode('Ctrl+クリックでノード同士を接続',x,y,4);
 
 [x,y]=ring(150,R1);          const bSearch=makeTextNode('🔍 検索・ジャンプ',x,y,5);
 [x,y]=ring(150-11,R2);       const searchA=makeTextNode('Ctrl+Fで検索',x,y,5);
