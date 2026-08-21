@@ -211,8 +211,8 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
 <div id="app">
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
-    <span style="font-size:11px;color:var(--color-text-tertiary)">クリック: 展開/折り畳み | 右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+クリック×2: 接続 | Ctrl+右クリック: 属性編集(URL/タグ/ステータス) | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | N/B: 次/前の接続グループの最若IDノードを中央へ | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.00</span>
+    <span style="font-size:11px;color:var(--color-text-tertiary)">左ダブルクリック: 展開/折り畳み | 右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+クリック×2: 接続 | Ctrl+右クリック: 属性編集(URL/タグ/ステータス) | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | N/B: 次/前の接続グループの最若IDノードを中央へ | WASD: スクロール </span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.02</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -1034,6 +1034,7 @@ function onDragMove(e){
 }
 function onDragUp(){if(dragNode&&didDrag)pushHistory();dragNode=null;dragDescendants=[];document.removeEventListener('mousemove',onDragMove);document.removeEventListener('mouseup',onDragUp);}
 
+let lastPlainClick={id:null,time:0};
 function onNodeClick(e,n){
   e.stopPropagation();
   if(connecting){
@@ -1053,21 +1054,35 @@ function onNodeClick(e,n){
     return;
   }
   if((e.ctrlKey||e.metaKey)&&e.shiftKey){
+    lastPlainClick={id:null,time:0};
     jumpToDuplicateNode(n);
     return;
   }
   if(e.shiftKey&&n.type==='text'){
+    lastPlainClick={id:null,time:0};
     n.colorIdx=(((n.colorIdx||0)+1)%COLORS.length);
     selected=n.id;pushHistory();renderAll();
     return;
   }
   if((e.ctrlKey||e.metaKey)&&!e.shiftKey){
+    lastPlainClick={id:null,time:0};
     ctrlConnectNode(n);
     return;
   }
-  // 左クリックのみ：選択 + 展開/折り畳みの切り替え（子ノードがない場合は選択のみ）
+  // 左クリックのみ：選択。同じノードを400ms以内に連続クリックした場合はダブルクリックとみなし、
+  // 展開/折り畳みを行う。毎クリックでrenderAll()が走り重い操作になり得るため、ネイティブの
+  // dblclickイベントに頼らずタイムスタンプで自前判定する（再描画のタイミング次第でネイティブ
+  // dblclickが発火しない環境があったための対策）。
+  const now=Date.now();
+  const isDoubleClick=lastPlainClick.id===n.id&&(now-lastPlainClick.time)<400;
   selected=n.id;
-  if(hasChildren(n.id))toggleCollapse(n);else renderAll();
+  if(isDoubleClick){
+    lastPlainClick={id:null,time:0};
+    if(hasChildren(n.id))toggleCollapse(n);else renderAll();
+  } else {
+    lastPlainClick={id:n.id,time:now};
+    renderAll();
+  }
 }
 function deleteNode(n){
   nodes=nodes.filter(nd=>nd.id!==n.id);
