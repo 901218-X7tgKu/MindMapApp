@@ -114,6 +114,11 @@ html,body{height:100%;background:var(--color-background-secondary);color:var(--c
 #multi-open-overlay.closing{animation:overlayOut .2s var(--ease-out) both}
 #multi-open-overlay.show>div{animation:modalPopIn .45s var(--ease-bounce) both;box-shadow:0 24px 60px rgba(0,0,0,.25)}
 #multi-open-overlay.closing>div{animation:modalPopOut .2s var(--ease-out) both}
+#tag-status-overlay{display:none;position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.45);backdrop-filter:blur(2px);z-index:250;align-items:center;justify-content:center}
+#tag-status-overlay.show{display:flex;animation:overlayIn .25s var(--ease-out) both}
+#tag-status-overlay.closing{animation:overlayOut .2s var(--ease-out) both}
+#tag-status-overlay.show>div{animation:modalPopIn .45s var(--ease-bounce) both;box-shadow:0 24px 60px rgba(0,0,0,.25)}
+#tag-status-overlay.closing>div{animation:modalPopOut .2s var(--ease-out) both}
 
 /* Drop hint */
 #drop-hint{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;text-align:center;color:var(--color-text-tertiary);font-size:13px;opacity:0;transition:opacity .2s}
@@ -216,8 +221,8 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
 <div id="app">
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
-    <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+クリック×2: 接続 | Ctrl+右クリック: 属性編集(URL/タグ/ステータス) | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | N/B: 次/前の接続グループの最若IDノードを中央へ | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.03</span>
+    <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | 何もない場所を右クリック: タグ・ステータス一覧 | Shift+右クリック: 削除 | Ctrl+クリック×2: 接続 | Ctrl+右クリック: 属性編集(URL/タグ/ステータス) | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | N/B: 次/前の接続グループの最若IDノードを中央へ | T: グループ内の最上位ノードを中央へ | E: 選択ノード以下で最も深いノードを中央へ | WASD: スクロール </span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.06</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -255,6 +260,22 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
         <p style="font-size:12px;color:var(--color-text-secondary)" id="multi-open-desc"></p>
         <div id="multi-open-list" style="display:flex;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto"></div>
         <button id="multi-open-close" style="justify-content:center;color:var(--color-text-tertiary)">閉じる</button>
+      </div>
+    </div>
+    <!-- Tag/Status overview modal: right-click on empty canvas area -->
+    <div id="tag-status-overlay">
+      <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-lg);padding:24px;display:flex;flex-direction:column;gap:14px;min-width:320px;max-width:440px;max-height:80vh;overflow-y:auto">
+        <p style="font-size:13px;font-weight:500">🏷 タグ・ステータス一覧</p>
+        <p style="font-size:11px;color:var(--color-text-tertiary)">クリックすると検索に反映されます</p>
+        <div>
+          <p style="font-size:11px;font-weight:600;color:var(--color-text-secondary);margin-bottom:6px">ステータス</p>
+          <div id="tag-status-status-list" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+        </div>
+        <div>
+          <p style="font-size:11px;font-weight:600;color:var(--color-text-secondary);margin-bottom:6px">タグ</p>
+          <div id="tag-status-tag-list" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+        </div>
+        <button id="tag-status-close" style="justify-content:center;color:var(--color-text-tertiary)">閉じる</button>
       </div>
     </div>
     <div id="toast"></div>
@@ -1550,7 +1571,93 @@ canvas.addEventListener('wheel',e=>{
 },{passive:false});
 
 // Prevent browser context menu on canvas
-canvas.addEventListener('contextmenu',e=>{if(!e.target.closest('.node-el')&&!e.target.closest('.img-node-el'))e.preventDefault();});
+// ── Tag/Status overview modal ─────────────────────────────
+// Right-clicking empty canvas space (not a node, not an edge — both of
+// those have their own contextmenu handlers with stopPropagation) shows a
+// summary of every status/tag currently used across the map, with a count
+// of how many nodes use each. Clicking one runs it through the existing
+// search box so the matching nodes get highlighted immediately.
+function getStatusTagCounts(){
+  const statusCounts=new Map();
+  const tagCounts=new Map();
+  nodes.forEach(n=>{
+    const status=(n.status||'').trim();
+    if(status)statusCounts.set(status,(statusCounts.get(status)||0)+1);
+    (n.tags||[]).forEach(t=>{
+      const tag=(t||'').trim();
+      if(tag)tagCounts.set(tag,(tagCounts.get(tag)||0)+1);
+    });
+  });
+  return {statusCounts,tagCounts};
+}
+
+function closeTagStatusOverlay(){
+  closeOverlay(document.getElementById('tag-status-overlay'));
+}
+document.getElementById('tag-status-close').addEventListener('click',closeTagStatusOverlay);
+
+function runSearchFromTagStatus(q){
+  const inp=document.getElementById('search-input');
+  inp.value=q;
+  doSearch(q);
+  closeTagStatusOverlay();
+  showToast('🔎 「'+q+'」で検索しました');
+}
+
+function buildTagStatusChip(label,count,onClick){
+  const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const btn=document.createElement('button');
+  btn.style.gap='6px';
+  btn.innerHTML='<span>'+esc(label)+'</span><span style="font-size:10px;font-weight:600;color:var(--color-text-tertiary)">'+count+'</span>';
+  btn.addEventListener('click',onClick);
+  return btn;
+}
+
+function showTagStatusOverlay(){
+  const {statusCounts,tagCounts}=getStatusTagCounts();
+  const statusList=document.getElementById('tag-status-status-list');
+  const tagList=document.getElementById('tag-status-tag-list');
+  statusList.innerHTML='';
+  tagList.innerHTML='';
+
+  const byCountThenName=(a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],'ja');
+  const sortedStatuses=[...statusCounts.entries()].sort(byCountThenName);
+  const sortedTags=[...tagCounts.entries()].sort(byCountThenName);
+
+  const emptyMsg=(container,text)=>{
+    const p=document.createElement('p');
+    p.style.cssText='font-size:11px;color:var(--color-text-tertiary)';
+    p.textContent=text;
+    container.appendChild(p);
+  };
+
+  if(sortedStatuses.length===0){
+    emptyMsg(statusList,'ステータスが設定されたノードはありません');
+  }else{
+    sortedStatuses.forEach(([status,count])=>{
+      statusList.appendChild(buildTagStatusChip(status,count,()=>runSearchFromTagStatus(status)));
+    });
+  }
+
+  if(sortedTags.length===0){
+    emptyMsg(tagList,'タグが設定されたノードはありません');
+  }else{
+    sortedTags.forEach(([tag,count])=>{
+      tagList.appendChild(buildTagStatusChip(tag,count,()=>runSearchFromTagStatus(tag)));
+    });
+  }
+
+  const ov=document.getElementById('tag-status-overlay');
+  ov.classList.remove('closing');
+  ov.classList.add('show');
+}
+
+canvas.addEventListener('contextmenu',e=>{
+  if(!e.target.closest('.node-el')&&!e.target.closest('.img-node-el')){
+    e.preventDefault();
+    showTagStatusOverlay();
+  }
+});
 
 // ── 複数タブD&D：新しいタブでの読み込みヘルパー ──────────────
 // 1ファイルを新しいタブで開き、localStorage経由でデータを受け渡す。
@@ -1784,6 +1891,45 @@ document.addEventListener('keydown',e=>{
       } else {
         e.preventDefault();
         showToast('⚠ 他の接続グループがありません');
+      }
+    }
+  }
+
+  // T: center on the top-most node (lowest level, then lowest id) within
+  // the selected node's connection group
+  if(e.key==='t'&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey){
+    if(selected!==null&&nodes.length>0){
+      e.preventDefault();
+      const levels=computeNodeLevels();
+      const {find}=getConnectionGroupReps();
+      const groupRoot=find(selected);
+      const groupNodes=nodes.filter(n=>find(n.id)===groupRoot);
+      if(groupNodes.length>0){
+        const minLevel=Math.min(...groupNodes.map(n=>levels.get(n.id)));
+        const candidates=groupNodes.filter(n=>levels.get(n.id)===minLevel);
+        const target=candidates.reduce((min,n)=>n.id<min.id?n:min,candidates[0]);
+        centerOnNode(target.id);
+        showToast('📍 グループ内で最も階層の高い親ノードを中央に表示しました');
+      }
+    }
+  }
+
+  // E: center on the deepest node (highest level, then highest id) among
+  // the selected node and its descendants only (not the whole group)
+  if(e.key==='e'&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey){
+    if(selected!==null&&nodes.length>0){
+      e.preventDefault();
+      const levels=computeNodeLevels();
+      const descendantIds=getAllDescendantIds(selected);
+      const candidateIds=new Set(descendantIds);
+      candidateIds.add(selected);
+      const candidateNodes=nodes.filter(n=>candidateIds.has(n.id));
+      if(candidateNodes.length>0){
+        const maxLevel=Math.max(...candidateNodes.map(n=>levels.get(n.id)));
+        const candidates=candidateNodes.filter(n=>levels.get(n.id)===maxLevel);
+        const target=candidates.reduce((max,n)=>n.id>max.id?n:max,candidates[0]);
+        centerOnNode(target.id);
+        showToast('📍 選択ノード以下で最も階層の深い子ノードを中央に表示しました');
       }
     }
   }
@@ -2089,6 +2235,36 @@ function getConnectionGroupReps(){
   });
   const reps=[...minIdByRoot.values()].sort((a,b)=>a-b);
   return {reps, find, minIdByRoot};
+}
+
+// Computes each node's hierarchy level (distance from its nearest root).
+// Root nodes (no incoming edge) are level 0; each edge hop from a parent
+// increases the level by 1. Multi-source BFS/relaxation so nodes reachable
+// via multiple parents get their shortest-path level. Nodes that are part
+// of a cycle with no reachable root (rare, manual connections only) fall
+// back to level 0 so they still resolve to a sensible target.
+function computeNodeLevels(){
+  const level=new Map();
+  const inDegree=new Map();
+  nodes.forEach(n=>inDegree.set(n.id,0));
+  edges.forEach(ed=>{if(inDegree.has(ed.to))inDegree.set(ed.to,inDegree.get(ed.to)+1);});
+  const queue=[];
+  nodes.forEach(n=>{if(inDegree.get(n.id)===0){level.set(n.id,0);queue.push(n.id);}});
+  let qi=0;
+  while(qi<queue.length){
+    const cur=queue[qi++];
+    const curLevel=level.get(cur);
+    edges.forEach(ed=>{
+      if(ed.from!==cur)return;
+      const existing=level.get(ed.to);
+      if(existing===undefined||curLevel+1<existing){
+        level.set(ed.to,curLevel+1);
+        queue.push(ed.to);
+      }
+    });
+  }
+  nodes.forEach(n=>{if(!level.has(n.id))level.set(n.id,0);});
+  return level;
 }
 
 function centerOnNode(nodeId, andRender=true){
