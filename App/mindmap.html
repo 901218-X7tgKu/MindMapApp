@@ -221,8 +221,8 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
 <div id="app">
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
-    <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | 何もない場所を右クリック: タグ・ステータス一覧 | Shift+右クリック: 削除 | Ctrl+クリック×2: 接続 | Ctrl+右クリック: 属性編集(URL/タグ/ステータス) | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | N/B: 次/前の接続グループの最若IDノードを中央へ | T: グループ内の最上位ノードを中央へ | E: 選択ノード以下で最も深いノードを中央へ | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.06</span>
+    <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | N/B: 次/前の接続グループの最若IDノードを中央へ | WASD: スクロール </span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.07</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -1235,6 +1235,14 @@ function closeOverlay(el, delay){
   el.classList.add('closing');
   setTimeout(()=>{el.classList.remove('show');el.classList.remove('closing');}, delay||210);
 }
+// Returns true while any modal/overlay is open, so canvas-level interactions
+// (Ctrl+click to add a node, panning, etc.) can be suppressed underneath it —
+// these overlays are DOM descendants of #canvas, so clicks on their backdrop
+// still bubble up to canvas's own mousedown listener unless explicitly guarded.
+function isAnyModalOpen(){
+  return ['drop-choice-overlay','multi-open-overlay','tag-status-overlay','save-modal','node-modal','edge-modal']
+    .some(id=>{const el=document.getElementById(id);return el&&el.classList.contains('show');});
+}
 function showDropChoice(data, filename){
   dropChoiceData=data;
   document.getElementById('drop-choice-filename').textContent=filename;
@@ -1515,6 +1523,7 @@ edgeModal.addEventListener('keydown',e=>{
 
 canvas.addEventListener('mousedown',e=>{
   if(e.button!==0)return;
+  if(isAnyModalOpen())return;
   if(e.shiftKey){
     // shift+left-click: move all nodes in world space
     e.preventDefault();
@@ -1595,6 +1604,9 @@ function closeTagStatusOverlay(){
   closeOverlay(document.getElementById('tag-status-overlay'));
 }
 document.getElementById('tag-status-close').addEventListener('click',closeTagStatusOverlay);
+document.getElementById('tag-status-overlay').addEventListener('click',e=>{
+  if(e.target.id==='tag-status-overlay')closeTagStatusOverlay();
+});
 
 function runSearchFromTagStatus(q){
   const inp=document.getElementById('search-input');
@@ -1655,6 +1667,7 @@ function showTagStatusOverlay(){
 canvas.addEventListener('contextmenu',e=>{
   if(!e.target.closest('.node-el')&&!e.target.closest('.img-node-el')){
     e.preventDefault();
+    if(isAnyModalOpen())return;
     showTagStatusOverlay();
   }
 });
