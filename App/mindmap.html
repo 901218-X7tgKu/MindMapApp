@@ -222,7 +222,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | N/B: 次/前の接続グループの最若IDノードを中央へ | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.07</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.08</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -409,15 +409,23 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
     <div class="sep"></div>
     <button id="btn-export"><i class="ti ti-file-export"></i> ファイル</button>
     <div class="sep"></div>
-    <div id="search-wrap" style="display:flex;align-items:center;gap:4px">
+    <div id="search-wrap" style="display:flex;align-items:center;gap:4px;position:relative">
       <div style="position:relative;display:flex;align-items:center">
         <i class="ti ti-search" style="position:absolute;left:7px;font-size:12px;color:var(--color-text-tertiary);pointer-events:none"></i>
         <input id="search-input" type="text" placeholder="検索..." autocomplete="off"
           style="font-size:12px;padding:4px 8px 4px 24px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);outline:none;width:140px;font-family:var(--font-sans)">
       </div>
+      <button id="search-filter-btn" title="検索フィルター"><i class="ti ti-filter"></i></button>
       <button id="search-prev" title="前の結果" disabled><i class="ti ti-chevron-up"></i></button>
       <button id="search-next" title="次の結果" disabled><i class="ti ti-chevron-down"></i></button>
       <span id="search-count" style="font-size:11px;color:var(--color-text-tertiary);white-space:nowrap;min-width:40px"></span>
+      <div id="search-filter-panel" style="display:none;position:absolute;bottom:100%;right:0;margin-bottom:6px;background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);padding:10px;box-shadow:0 12px 30px rgba(0,0,0,.2);z-index:120;flex-direction:column;gap:6px;min-width:150px">
+        <p style="font-size:10px;font-weight:600;color:var(--color-text-tertiary)">検索対象</p>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="filter-text-node" checked> 通常ノード（本文）</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="filter-image-node" checked> 画像ノード（コメント）</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="filter-tags" checked> タグ</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="filter-status" checked> ステータス</label>
+      </div>
     </div>
     <span id="hint">Ctrl+Z: Undo / Ctrl+Y: Redo</span>
   </div>
@@ -1608,7 +1616,14 @@ document.getElementById('tag-status-overlay').addEventListener('click',e=>{
   if(e.target.id==='tag-status-overlay')closeTagStatusOverlay();
 });
 
-function runSearchFromTagStatus(q){
+function runSearchFromTagStatus(q, filterKey){
+  // クリックした種別（タグ or ステータス）のみを検索対象にするため、
+  // 他のフィルターは一旦全てOFFにし、チェックボックスの表示も同期する
+  Object.keys(searchFilters).forEach(k=>{searchFilters[k]=(k===filterKey);});
+  Object.keys(searchFilterCheckboxMap).forEach(id=>{
+    document.getElementById(id).checked=searchFilters[searchFilterCheckboxMap[id]];
+  });
+  updateSearchFilterBtnState();
   const inp=document.getElementById('search-input');
   inp.value=q;
   doSearch(q);
@@ -1647,7 +1662,7 @@ function showTagStatusOverlay(){
     emptyMsg(statusList,'ステータスが設定されたノードはありません');
   }else{
     sortedStatuses.forEach(([status,count])=>{
-      statusList.appendChild(buildTagStatusChip(status,count,()=>runSearchFromTagStatus(status)));
+      statusList.appendChild(buildTagStatusChip(status,count,()=>runSearchFromTagStatus(status,'status')));
     });
   }
 
@@ -1655,7 +1670,7 @@ function showTagStatusOverlay(){
     emptyMsg(tagList,'タグが設定されたノードはありません');
   }else{
     sortedTags.forEach(([tag,count])=>{
-      tagList.appendChild(buildTagStatusChip(tag,count,()=>runSearchFromTagStatus(tag)));
+      tagList.appendChild(buildTagStatusChip(tag,count,()=>runSearchFromTagStatus(tag,'tags')));
     });
   }
 
@@ -2181,13 +2196,19 @@ document.addEventListener('keydown',e=>{
 let searchResults=[];   // array of node ids matching current query
 let searchIdx=0;        // current result index
 
+// 検索フィルター：どのノード種別・属性を検索対象に含めるか（初期値は全てON＝従来通りの全文検索）
+const searchFilters={textNode:true,imageNode:true,tags:true,status:true};
+
 function nodeMatchesQuery(n, q){
   if(!q)return false;
   const lower=q.toLowerCase();
-  const content=n.type==='image'?(n.comment||''):(n.text||'');
-  if(content.toLowerCase().includes(lower))return true;
-  if((n.status||'').toLowerCase().includes(lower))return true;
-  if(n.tags&&n.tags.some(t=>t.toLowerCase().includes(lower)))return true;
+  if(n.type==='image'){
+    if(searchFilters.imageNode&&(n.comment||'').toLowerCase().includes(lower))return true;
+  }else{
+    if(searchFilters.textNode&&(n.text||'').toLowerCase().includes(lower))return true;
+  }
+  if(searchFilters.status&&(n.status||'').toLowerCase().includes(lower))return true;
+  if(searchFilters.tags&&n.tags&&n.tags.some(t=>t.toLowerCase().includes(lower)))return true;
   return false;
 }
 
@@ -2340,6 +2361,38 @@ document.getElementById('search-prev').addEventListener('click',()=>{
   searchIdx=(searchIdx-1+searchResults.length)%searchResults.length;
   centerOnNode(searchResults[searchIdx]);
   updateSearchUI();
+});
+
+// ── Search filter panel ──────────────────────────────────
+// Lets the user restrict which node types/attributes the search box
+// matches against. All four are on by default (identical to the previous,
+// unfiltered full-text search behaviour).
+const searchFilterBtn=document.getElementById('search-filter-btn');
+const searchFilterPanel=document.getElementById('search-filter-panel');
+function updateSearchFilterBtnState(){
+  const allOn=searchFilters.textNode&&searchFilters.imageNode&&searchFilters.tags&&searchFilters.status;
+  searchFilterBtn.classList.toggle('active',!allOn);
+}
+searchFilterBtn.addEventListener('click',e=>{
+  e.stopPropagation();
+  const willShow=searchFilterPanel.style.display==='none'||!searchFilterPanel.style.display;
+  searchFilterPanel.style.display=willShow?'flex':'none';
+});
+searchFilterPanel.addEventListener('click',e=>e.stopPropagation());
+document.addEventListener('click',()=>{searchFilterPanel.style.display='none';});
+const searchFilterCheckboxMap={
+  'filter-text-node':'textNode',
+  'filter-image-node':'imageNode',
+  'filter-tags':'tags',
+  'filter-status':'status'
+};
+Object.keys(searchFilterCheckboxMap).forEach(id=>{
+  document.getElementById(id).addEventListener('change',e=>{
+    searchFilters[searchFilterCheckboxMap[id]]=e.target.checked;
+    updateSearchFilterBtnState();
+    const q=document.getElementById('search-input').value.trim();
+    if(q)doSearch(q);
+  });
 });
 document.addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&e.key==='f'&&!e.shiftKey){
@@ -2827,16 +2880,97 @@ canvas.addEventListener('wheel',e=>{
   const ns=Math.min(4,Math.max(0.2,scale*z));
   panX=mx-(mx-panX)*(ns/scale);panY=my-(my-panY)*(ns/scale);scale=ns;renderAll();
 },{passive:false});
-canvas.addEventListener('contextmenu',e=>e.preventDefault());
+canvas.addEventListener('contextmenu',e=>{
+  if(!e.target.closest('.node-el')&&!e.target.closest('.img-node-el')){
+    e.preventDefault();
+    if(document.getElementById('tag-status-overlay').classList.contains('show'))return;
+    showTagStatusOverlay();
+  }
+});
+
+// ── Tag/Status overview modal (right-click on empty canvas) ──────────────
+function getStatusTagCounts(){
+  const statusCounts=new Map();
+  const tagCounts=new Map();
+  nodes.forEach(n=>{
+    const status=(n.status||'').trim();
+    if(status)statusCounts.set(status,(statusCounts.get(status)||0)+1);
+    (n.tags||[]).forEach(t=>{
+      const tag=(t||'').trim();
+      if(tag)tagCounts.set(tag,(tagCounts.get(tag)||0)+1);
+    });
+  });
+  return {statusCounts,tagCounts};
+}
+function closeTagStatusOverlay(){document.getElementById('tag-status-overlay').classList.remove('show');}
+document.getElementById('tag-status-close').addEventListener('click',closeTagStatusOverlay);
+document.getElementById('tag-status-overlay').addEventListener('click',e=>{
+  if(e.target.id==='tag-status-overlay')closeTagStatusOverlay();
+});
+function runSearchFromTagStatus(q, filterKey){
+  Object.keys(searchFilters).forEach(k=>{searchFilters[k]=(k===filterKey);});
+  Object.keys(searchFilterCheckboxMap).forEach(id=>{
+    document.getElementById(id).checked=searchFilters[searchFilterCheckboxMap[id]];
+  });
+  updateSearchFilterBtnState();
+  const inp=document.getElementById('search-input');
+  inp.value=q;
+  doSearch(q);
+  closeTagStatusOverlay();
+  showToast('🔎 「'+q+'」で検索しました');
+}
+function buildTagStatusChip(label,count,onClick){
+  const btn=document.createElement('button');
+  btn.style.gap='6px';
+  btn.innerHTML='<span>'+escHtml(label)+'</span><span style="font-size:10px;font-weight:600;color:var(--color-text-tertiary)">'+count+'</span>';
+  btn.addEventListener('click',onClick);
+  return btn;
+}
+function showTagStatusOverlay(){
+  const {statusCounts,tagCounts}=getStatusTagCounts();
+  const statusList=document.getElementById('tag-status-status-list');
+  const tagList=document.getElementById('tag-status-tag-list');
+  statusList.innerHTML='';
+  tagList.innerHTML='';
+  const byCountThenName=(a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],'ja');
+  const sortedStatuses=[...statusCounts.entries()].sort(byCountThenName);
+  const sortedTags=[...tagCounts.entries()].sort(byCountThenName);
+  const emptyMsg=(container,text)=>{
+    const p=document.createElement('p');
+    p.style.cssText='font-size:11px;color:var(--color-text-tertiary)';
+    p.textContent=text;
+    container.appendChild(p);
+  };
+  if(sortedStatuses.length===0){
+    emptyMsg(statusList,'ステータスが設定されたノードはありません');
+  }else{
+    sortedStatuses.forEach(([status,count])=>{
+      statusList.appendChild(buildTagStatusChip(status,count,()=>runSearchFromTagStatus(status,'status')));
+    });
+  }
+  if(sortedTags.length===0){
+    emptyMsg(tagList,'タグが設定されたノードはありません');
+  }else{
+    sortedTags.forEach(([tag,count])=>{
+      tagList.appendChild(buildTagStatusChip(tag,count,()=>runSearchFromTagStatus(tag,'tags')));
+    });
+  }
+  document.getElementById('tag-status-overlay').classList.add('show');
+}
 
 // Search
 let sResults=[],sIdx=0;
+// 検索フィルター：どのノード種別・属性を検索対象に含めるか（初期値は全てON）
+const searchFilters={textNode:true,imageNode:true,tags:true,status:true};
 function nodeMatchesQueryPublic(n,q){
   const lower=q.toLowerCase();
-  const content=n.type==='image'?(n.comment||''):(n.text||'');
-  if(content.toLowerCase().includes(lower))return true;
-  if((n.status||'').toLowerCase().includes(lower))return true;
-  if(n.tags&&n.tags.some(t=>t.toLowerCase().includes(lower)))return true;
+  if(n.type==='image'){
+    if(searchFilters.imageNode&&(n.comment||'').toLowerCase().includes(lower))return true;
+  }else{
+    if(searchFilters.textNode&&(n.text||'').toLowerCase().includes(lower))return true;
+  }
+  if(searchFilters.status&&(n.status||'').toLowerCase().includes(lower))return true;
+  if(searchFilters.tags&&n.tags&&n.tags.some(t=>t.toLowerCase().includes(lower)))return true;
   return false;
 }
 function doSearch(q){
@@ -2900,6 +3034,35 @@ document.getElementById('search-input').addEventListener('keydown',function(e){
 });
 document.getElementById('search-next').addEventListener('click',()=>{if(!sResults.length)return;sIdx=(sIdx+1)%sResults.length;centerOn(sResults[sIdx]);updateSearchUI();});
 document.getElementById('search-prev').addEventListener('click',()=>{if(!sResults.length)return;sIdx=(sIdx-1+sResults.length)%sResults.length;centerOn(sResults[sIdx]);updateSearchUI();});
+
+// ── Search filter panel ──────────────────────────────────
+const searchFilterBtn=document.getElementById('search-filter-btn');
+const searchFilterPanel=document.getElementById('search-filter-panel');
+function updateSearchFilterBtnState(){
+  const allOn=searchFilters.textNode&&searchFilters.imageNode&&searchFilters.tags&&searchFilters.status;
+  searchFilterBtn.classList.toggle('active',!allOn);
+}
+searchFilterBtn.addEventListener('click',e=>{
+  e.stopPropagation();
+  const willShow=searchFilterPanel.style.display==='none'||!searchFilterPanel.style.display;
+  searchFilterPanel.style.display=willShow?'flex':'none';
+});
+searchFilterPanel.addEventListener('click',e=>e.stopPropagation());
+document.addEventListener('click',()=>{searchFilterPanel.style.display='none';});
+const searchFilterCheckboxMap={
+  'filter-text-node':'textNode',
+  'filter-image-node':'imageNode',
+  'filter-tags':'tags',
+  'filter-status':'status'
+};
+Object.keys(searchFilterCheckboxMap).forEach(id=>{
+  document.getElementById(id).addEventListener('change',e=>{
+    searchFilters[searchFilterCheckboxMap[id]]=e.target.checked;
+    updateSearchFilterBtnState();
+    const q=document.getElementById('search-input').value.trim();
+    if(q)doSearch(q);
+  });
+});
 document.addEventListener('keydown',e=>{
   if(e.target.tagName==='INPUT')return;
   if((e.ctrlKey||e.metaKey)&&e.key==='f'){e.preventDefault();document.getElementById('search-input').focus();}
@@ -2956,6 +3119,7 @@ renderAll();
   --color-text-primary:#1a1a19;--color-text-secondary:#6b6a64;--color-text-tertiary:#9c9a92;
   --color-border-tertiary:rgba(0,0,0,.12);--color-border-secondary:rgba(0,0,0,.22);
   --color-border-primary:rgba(0,0,0,.32);--color-text-info:#0c447c;
+  --color-background-info:#e6f1fb;--color-border-info:#b5d4f4;
   --color-edge:#aaa8a0;
   --border-radius-md:8px;--border-radius-lg:12px;
   --ease-bounce:cubic-bezier(.34,1.56,.64,1);
@@ -2968,6 +3132,7 @@ body.dark{
   --color-text-primary:#e8e6de;--color-text-secondary:#a8a69e;--color-text-tertiary:#6e6c66;
   --color-border-tertiary:rgba(255,255,255,.1);--color-border-secondary:rgba(255,255,255,.18);
   --color-border-primary:rgba(255,255,255,.28);--color-text-info:#85b7eb;
+  --color-background-info:#0c2a45;--color-border-info:#185fa5;
   --color-edge:#6e6c66;
 }
 html,body{height:100%;background:var(--color-background-secondary);color:var(--color-text-primary);font-family:var(--font-sans)}
@@ -3001,6 +3166,7 @@ button{font-family:var(--font-sans);font-size:12px;padding:5px 10px;border:0.5px
 button:hover:not(:disabled){background:var(--color-background-secondary);transform:translateY(-1px);box-shadow:0 3px 8px rgba(0,0,0,.1)}
 button:active:not(:disabled){transform:translateY(0) scale(.94);box-shadow:none;transition-duration:.05s}
 button:disabled{opacity:.35;cursor:not-allowed}
+button.active{background:var(--color-background-info);border-color:var(--color-border-info);color:var(--color-text-info)}
 #theme-icon{display:inline-block;transition:transform .1s}
 .theme-spin{animation:themeSpin .5s var(--ease-bounce)}
 .sep{width:0.5px;height:20px;background:var(--color-border-tertiary);margin:0 2px}
@@ -3058,15 +3224,37 @@ button:disabled{opacity:.35;cursor:not-allowed}
         <div class="attr-modal-actions"><button id="attr-modal-close">閉じる</button></div>
       </div>
     </div>
+    <!-- Tag/Status overview modal (right-click on empty canvas area) -->
+    <div id="tag-status-overlay" class="attr-modal-overlay">
+      <div class="attr-modal-box" style="width:340px;max-width:92vw;max-height:80vh;overflow-y:auto">
+        <h3>🏷 タグ・ステータス一覧</h3>
+        <p style="font-size:11px;color:var(--color-text-tertiary);margin:0 0 6px">クリックすると検索に反映されます</p>
+        <div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:4px">ステータス</div>
+        <div id="tag-status-status-list" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+        <div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:4px;margin-top:10px">タグ</div>
+        <div id="tag-status-tag-list" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+        <div class="attr-modal-actions"><button id="tag-status-close">閉じる</button></div>
+      </div>
+    </div>
   </div>
   <div id="toolbar">
-    <div style="position:relative;display:flex;align-items:center">
-      <i class="ti ti-search" style="position:absolute;left:7px;font-size:12px;color:var(--color-text-tertiary);pointer-events:none"></i>
-      <input id="search-input" type="text" placeholder="検索..." autocomplete="off">
+    <div id="search-wrap" style="display:flex;align-items:center;gap:4px;position:relative">
+      <div style="position:relative;display:flex;align-items:center">
+        <i class="ti ti-search" style="position:absolute;left:7px;font-size:12px;color:var(--color-text-tertiary);pointer-events:none"></i>
+        <input id="search-input" type="text" placeholder="検索..." autocomplete="off">
+      </div>
+      <button id="search-filter-btn" title="検索フィルター"><i class="ti ti-filter"></i></button>
+      <button id="search-prev" disabled><i class="ti ti-chevron-up"></i></button>
+      <button id="search-next" disabled><i class="ti ti-chevron-down"></i></button>
+      <span id="search-count" style="font-size:11px;color:var(--color-text-tertiary);white-space:nowrap;min-width:40px"></span>
+      <div id="search-filter-panel" style="display:none;position:absolute;bottom:100%;right:0;margin-bottom:6px;background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);padding:10px;box-shadow:0 12px 30px rgba(0,0,0,.2);z-index:120;flex-direction:column;gap:6px;min-width:150px">
+        <p style="font-size:10px;font-weight:600;color:var(--color-text-tertiary);margin:0">検索対象</p>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="filter-text-node" checked> 通常ノード（本文）</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="filter-image-node" checked> 画像ノード（コメント）</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="filter-tags" checked> タグ</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="filter-status" checked> ステータス</label>
+      </div>
     </div>
-    <button id="search-prev" disabled><i class="ti ti-chevron-up"></i></button>
-    <button id="search-next" disabled><i class="ti ti-chevron-down"></i></button>
-    <span id="search-count" style="font-size:11px;color:var(--color-text-tertiary);white-space:nowrap;min-width:40px"></span>
     <span id="hint">🔒 閲覧専用</span>
   </div>
 </div>
