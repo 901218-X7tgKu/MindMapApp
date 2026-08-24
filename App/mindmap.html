@@ -109,6 +109,11 @@ html,body{height:100%;background:var(--color-background-secondary);color:var(--c
 #drop-choice-overlay.closing{animation:overlayOut .2s var(--ease-out) both}
 #drop-choice-overlay.show>div{animation:modalPopIn .45s var(--ease-bounce) both;box-shadow:0 24px 60px rgba(0,0,0,.25)}
 #drop-choice-overlay.closing>div{animation:modalPopOut .2s var(--ease-out) both}
+#multi-open-overlay{display:none;position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.45);backdrop-filter:blur(2px);z-index:250;align-items:center;justify-content:center}
+#multi-open-overlay.show{display:flex;animation:overlayIn .25s var(--ease-out) both}
+#multi-open-overlay.closing{animation:overlayOut .2s var(--ease-out) both}
+#multi-open-overlay.show>div{animation:modalPopIn .45s var(--ease-bounce) both;box-shadow:0 24px 60px rgba(0,0,0,.25)}
+#multi-open-overlay.closing>div{animation:modalPopOut .2s var(--ease-out) both}
 
 /* Drop hint */
 #drop-hint{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;text-align:center;color:var(--color-text-tertiary);font-size:13px;opacity:0;transition:opacity .2s}
@@ -211,8 +216,8 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
 <div id="app">
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
-    <span style="font-size:11px;color:var(--color-text-tertiary)">左ダブルクリック: 展開/折り畳み | 右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+クリック×2: 接続 | Ctrl+右クリック: 属性編集(URL/タグ/ステータス) | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | N/B: 次/前の接続グループの最若IDノードを中央へ | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.02</span>
+    <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+クリック×2: 接続 | Ctrl+右クリック: 属性編集(URL/タグ/ステータス) | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | N/B: 次/前の接続グループの最若IDノードを中央へ | WASD: スクロール </span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.03</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -241,6 +246,15 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
           <button id="drop-choice-append" style="flex:1;justify-content:center"><i class="ti ti-plus"></i> 追加</button>
         </div>
         <button id="drop-choice-cancel" style="justify-content:center;color:var(--color-text-tertiary)">キャンセル</button>
+      </div>
+    </div>
+    <!-- Multi-file new-tab open overlay: pick which dropped .mindmap files to open -->
+    <div id="multi-open-overlay">
+      <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-lg);padding:24px;display:flex;flex-direction:column;gap:14px;min-width:300px;max-width:380px;text-align:center">
+        <p style="font-size:13px;font-weight:500" id="multi-open-title"></p>
+        <p style="font-size:12px;color:var(--color-text-secondary)" id="multi-open-desc"></p>
+        <div id="multi-open-list" style="display:flex;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto"></div>
+        <button id="multi-open-close" style="justify-content:center;color:var(--color-text-tertiary)">閉じる</button>
       </div>
     </div>
     <div id="toast"></div>
@@ -1538,6 +1552,83 @@ canvas.addEventListener('wheel',e=>{
 // Prevent browser context menu on canvas
 canvas.addEventListener('contextmenu',e=>{if(!e.target.closest('.node-el')&&!e.target.closest('.img-node-el'))e.preventDefault();});
 
+// ── 複数タブD&D：新しいタブでの読み込みヘルパー ──────────────
+// 1ファイルを新しいタブで開き、localStorage経由でデータを受け渡す。
+// ポップアップブロックの判定は window.open() の戻り値だけでは不十分な
+// ブラウザがあるため、少し待って win.closed も確認してから判定する。
+// cb(true/false) で成功/失敗（ブロック）を通知する。
+function openSingleMapInNewTab(file, cb){
+  const key='mmHandoff_'+Date.now()+'_'+Math.random().toString(36).slice(2,8);
+  const url=new URL(window.location.href);
+  url.search='';url.hash='';
+  url.searchParams.set('mmKey',key);
+  url.searchParams.set('mmName',file.name);
+  const win=window.open(url.toString(),'_blank');
+  setTimeout(()=>{
+    const isBlocked=!win||win.closed;
+    if(isBlocked){cb&&cb(false);return;}
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      const data=ev.target.result;
+      if(!deserialize(data)){
+        try{localStorage.setItem(key,'ERROR');}catch(err){}
+      }else{
+        try{
+          localStorage.setItem(key,data);
+        }catch(err){
+          showToast('⚠ '+file.name+' の受け渡しに失敗しました（データが大きすぎる可能性があります）');
+        }
+      }
+    };
+    reader.readAsText(file);
+    cb&&cb(true);
+  },150);
+}
+
+let _pendingBlockedFiles=[];
+function closeMultiOpenOverlay(){
+  closeOverlay(document.getElementById('multi-open-overlay'));
+  _pendingBlockedFiles=[];
+}
+document.getElementById('multi-open-close').addEventListener('click',closeMultiOpenOverlay);
+
+// 複数の .mindmap ファイルをそれぞれ新しいタブで開くための一覧を表示する。
+// ブラウザは「1回のユーザー操作につきポップアップ1つまで」に制限している
+// ことが多く、ループでの自動連続オープンは信頼できないため、
+// ボタンクリック（＝確実なユーザー操作）から1件ずつ開く方式に統一している。
+function showMultiOpenOverlay(files, title, desc){
+  _pendingBlockedFiles=files.slice();
+  document.getElementById('multi-open-title').textContent=title;
+  document.getElementById('multi-open-desc').textContent=desc;
+  const list=document.getElementById('multi-open-list');
+  list.innerHTML='';
+  const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  files.forEach(f=>{
+    const btn=document.createElement('button');
+    btn.style.justifyContent='space-between';
+    btn.style.gap='8px';
+    btn.innerHTML='<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(f.name)+'</span><i class="ti ti-external-link"></i>';
+    btn.addEventListener('click',()=>{
+      btn.disabled=true;
+      openSingleMapInNewTab(f, ok=>{
+        if(ok){
+          btn.style.opacity='0.5';
+          btn.innerHTML='<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">✓ '+esc(f.name)+'</span>';
+          _pendingBlockedFiles=_pendingBlockedFiles.filter(x=>x!==f);
+          if(_pendingBlockedFiles.length===0)setTimeout(closeMultiOpenOverlay,500);
+        }else{
+          btn.disabled=false;
+          showToast('⚠ '+f.name+' はブロックされました。ブラウザのアドレスバーからこのページのポップアップを許可してください');
+        }
+      });
+    });
+    list.appendChild(btn);
+  });
+  const ov=document.getElementById('multi-open-overlay');
+  ov.classList.remove('closing');
+  ov.classList.add('show');
+}
+
 // ── Drag & drop onto canvas ───────────────────────────────
 // Supports: image files → image node / .mindmap files → load map
 canvas.addEventListener('dragenter',e=>{e.preventDefault();canvas.classList.add('dragover');});
@@ -1548,8 +1639,21 @@ canvas.addEventListener('drop',e=>{
   const files=[...e.dataTransfer.files];
   if(!files.length)return;
 
-  // ── .mindmap file: show overwrite/append choice ──
-  const mapFile=files.find(f=>f.name.endsWith('.mindmap'));
+  const mapFiles=files.filter(f=>f.name.endsWith('.mindmap'));
+
+  // ── 2つ以上の .mindmap ファイル：一覧を表示し、ボタンから1件ずつ新規タブで開く ──
+  // （ブラウザのポップアップブロックにより自動連続オープンは信頼できないため）
+  if(mapFiles.length>1){
+    showMultiOpenOverlay(
+      mapFiles,
+      `📥 ${mapFiles.length}件のマインドマップが見つかりました`,
+      '下のボタンから1件ずつ新しいタブで開いてください'
+    );
+    return;
+  }
+
+  // ── .mindmap file（1件）: show overwrite/append choice ──
+  const mapFile=mapFiles[0];
   if(mapFile){
     const reader=new FileReader();
     reader.onload=ev=>{
@@ -2878,10 +2982,65 @@ window.addEventListener('beforeunload',e=>{
   });
 })();
 
+// ── 複数タブD&D：受け渡しデータの受信 ────────────────────────
+// 別タブ（元のタブ）で複数の .mindmap が同時にドロップされた場合、
+// 各ファイルはこのタブを mmKey 付きURLで開き、元タブが読み終わり次第
+// localStorage 経由でデータを渡してくる。'storage' イベントで受信する。
+let _mmHandoffActive=false;
+(function(){
+  const params=new URLSearchParams(window.location.search);
+  const key=params.get('mmKey');
+  if(!key)return;
+  _mmHandoffActive=true;
+  const name=params.get('mmName')||'';
+
+  // リロード時に再度ハンドオフを試みないよう、URLからパラメータを除去
+  params.delete('mmKey');params.delete('mmName');
+  const qs=params.toString();
+  window.history.replaceState({},'',window.location.pathname+(qs?'?'+qs:'')+window.location.hash);
+
+  const finishHandoff=data=>{
+    localStorage.removeItem(key);
+    if(data && data!=='ERROR'){
+      loadMap(data,'overwrite','✓ '+(name||'マインドマップ')+' を読み込みました');
+      // Set save filename to the dropped file's name (without extension)
+      const base=name.replace(/\.mindmap$/i,'');
+      if(base)document.getElementById('save-filename').value=base;
+    }else{
+      showToast('⚠ '+(name||'ファイル')+' の読み込みに失敗しました（フォーマット不正）');
+    }
+  };
+
+  const existing=localStorage.getItem(key);
+  if(existing!==null){
+    finishHandoff(existing);
+    return;
+  }
+
+  showToast('📥 '+(name||'マインドマップ')+' を読み込み中…');
+  const onStorage=ev=>{
+    if(ev.key===key && ev.newValue!==null){
+      window.removeEventListener('storage',onStorage);
+      clearTimeout(timeoutId);
+      finishHandoff(ev.newValue);
+    }
+  };
+  window.addEventListener('storage',onStorage);
+  const timeoutId=setTimeout(()=>{
+    window.removeEventListener('storage',onStorage);
+    // storage イベントを取りこぼした場合の保険としてポーリング結果を確認
+    const v=localStorage.getItem(key);
+    if(v!==null)finishHandoff(v);
+    else showToast('⚠ 元のタブが閉じられたため読み込めませんでした');
+  },10000);
+})();
+
 // ── Init ──────────────────────────────────────────────────
 // Starter map: doubles as a quick feature tour, arranged in a hexagon
 // around the root. The formatting/edge-comment branches demonstrate
 // those features using the features themselves.
+// ハンドオフ受信中（別タブからの複数D&D）はサンプルマップを表示しない
+if(!_mmHandoffActive){
 const rect=canvas.getBoundingClientRect();
 const cx=(rect.width>0?rect.width/2:500)/scale,cy=(rect.height>0?rect.height/2:300)/scale;
 const deg=d=>d*Math.PI/180;
@@ -2927,6 +3086,7 @@ renderEdges();pushHistory();
   const youngest=nodes.reduce((min,n)=>n.id<min.id?n:min,nodes[0]);
   centerOnNode(youngest.id);
 }
+} // end if(!_mmHandoffActive)
 </script>
 </body>
 </html>
