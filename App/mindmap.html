@@ -221,8 +221,8 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
 <div id="app">
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
-    <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | N/B: 次/前の接続グループの最若IDノードを中央へ | C: 拡大率を100%に | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.11</span>
+    <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | WASD: スクロール </span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.13</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -1064,7 +1064,9 @@ let dragNode=null,dragOffset={x:0,y:0},didDrag=false,dragDescendants=[];
 function onNodeMouseDown(e,n){
   if(connecting||e.shiftKey)return;e.stopPropagation();if(e.button!==0)return;
   dragNode=n;didDrag=false;
-  ctrlDragging=(e.ctrlKey||e.metaKey);
+  // 折り畳まれたノードは子孫が画面上に見えていないため、Ctrlを押していなくても
+  // 子孫ごと連動して移動させる（気づかずに大きくずらしてしまうのを防ぐため）
+  ctrlDragging=(e.ctrlKey||e.metaKey)||collapsedNodes.has(n.id);
   if(ctrlDragging){
     const descIds=getAllDescendants(n.id);
     dragDescendants=nodes.filter(nd=>descIds.has(nd.id));
@@ -1919,6 +1921,24 @@ document.addEventListener('keydown',e=>{
     showToast('🔍 拡大率を100%に戻しました');
   }
 
+  // X / Shift+X: cycle through search results (same as the next/prev result buttons)
+  if(e.key==='x'&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey){
+    if(searchResults.length>0){
+      e.preventDefault();
+      searchIdx=(searchIdx+1)%searchResults.length;
+      centerOnNode(searchResults[searchIdx]);
+      updateSearchUI();
+    }
+  }
+  if(e.shiftKey&&e.key==='X'&&!e.ctrlKey&&!e.metaKey){
+    if(searchResults.length>0){
+      e.preventDefault();
+      searchIdx=(searchIdx-1+searchResults.length)%searchResults.length;
+      centerOnNode(searchResults[searchIdx]);
+      updateSearchUI();
+    }
+  }
+
   // N / B: center on the representative (lowest-id) node of the next/previous
   // connected group, relative to the group the selected node belongs to (wraps around)
   if((e.key==='n'||e.key==='b')&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey){
@@ -2713,7 +2733,7 @@ function openNodeUrl(n){
 function openAttrModal(n){
   const tags=n.tags||[];
   const status=n.status||'';
-  const tagsHtml=tags.length?tags.map(t=>'<span class="attr-tag-chip">#'+escHtml(t)+'</span>').join(''):'<span class="attr-empty">タグなし</span>';
+  const tagsHtml=tags.length?tags.map(t=>'<span class="attr-tag-chip">'+escHtml(t)+'</span>').join(''):'<span class="attr-empty">タグなし</span>';
   const statusHtml=status?('<span class="attr-status-chip">'+escHtml(status)+'</span>'):'<span class="attr-empty">ステータスなし</span>';
   document.getElementById('attr-modal-tags').innerHTML='<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:4px">タグ</div>'+tagsHtml;
   document.getElementById('attr-modal-status').innerHTML='<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:4px;margin-top:8px">ステータス</div>'+statusHtml;
@@ -3142,6 +3162,22 @@ document.addEventListener('keydown',e=>{
     renderAll();
     showToast('🔍 拡大率を100%に戻しました');
   }
+  if(e.key==='x'&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey){
+    if(sResults.length>0){
+      e.preventDefault();
+      sIdx=(sIdx+1)%sResults.length;
+      centerOn(sResults[sIdx]);
+      updateSearchUI();
+    }
+  }
+  if(e.shiftKey&&e.key==='X'&&!e.ctrlKey&&!e.metaKey){
+    if(sResults.length>0){
+      e.preventDefault();
+      sIdx=(sIdx-1+sResults.length)%sResults.length;
+      centerOn(sResults[sIdx]);
+      updateSearchUI();
+    }
+  }
   if(!e.ctrlKey&&!e.metaKey&&!e.shiftKey){
     const rect=canvas.getBoundingClientRect();
     const stepX=rect.width*0.5;const stepY=rect.height*0.5;
@@ -3265,7 +3301,7 @@ button.active{background:var(--color-background-info);border-color:var(--color-b
 <div id="app">
   <div id="header">
     <h1>🗺 ${escHtmlStr(title)}</h1>
-    <span style="font-size:11px;color:var(--color-text-tertiary)">クリック: 展開/折り畳み | 右クリック: タグ・ステータスを確認 | Ctrl+Shift+右クリック: URLを開く | ホイール: ズーム | ドラッグ: 移動 | Shift+Q: 全展開 | Shift+W: 全折り畳み | WASD: スクロール | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | Ctrl+Shift+クリック: 同じ内容のノードへジャンプ</span>
+    <span style="font-size:11px;color:var(--color-text-tertiary)">クリック: 展開/折り畳み | 右クリック: タグ・ステータスを確認 | Ctrl+Shift+右クリック: URLを開く | ホイール: ズーム | ドラッグ: 移動 | Shift+Q: 全展開 | Shift+W: 全折り畳み | WASD: スクロール | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | X/Shift+X: 次/前の検索結果へ | Ctrl+Shift+クリック: 同じ内容のノードへジャンプ</span>
     <button id="btn-theme" style="margin-left:8px;padding:4px 10px"><i id="theme-icon" class="ti ti-moon"></i> <span id="theme-label">ダーク</span></button>
   </div>
   <div id="canvas">
@@ -3295,9 +3331,9 @@ button.active{background:var(--color-background-info);border-color:var(--color-b
       <div class="attr-modal-box" style="width:340px;max-width:92vw;max-height:80vh;overflow-y:auto">
         <h3>🏷 タグ・ステータス一覧</h3>
         <p style="font-size:11px;color:var(--color-text-tertiary);margin:0 0 6px">クリックすると検索に反映されます</p>
-        <div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:4px;margin-top:10px">タグ</div>
+        <div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:4px">タグ</div>
         <div id="tag-status-tag-list" style="display:flex;flex-wrap:wrap;gap:6px"></div>
-        <div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:4px">ステータス</div>
+        <div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:4px;margin-top:10px">ステータス</div>
         <div id="tag-status-status-list" style="display:flex;flex-wrap:wrap;gap:6px"></div>
         <div class="attr-modal-actions"><button id="tag-status-close">閉じる</button></div>
       </div>
