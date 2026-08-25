@@ -222,7 +222,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | N/B: 次/前の接続グループの最若IDノードを中央へ | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.09</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.10</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -462,7 +462,6 @@ let _dupJumpContent=null, _dupJumpIdx=0;      // Ctrl+Shift+click: cycle through
 let ctrlConnectPending=null;                  // ctrl+right-click connect
 let panX=0, panY=0, isPanning=false, panStart={x:0,y:0};
 let scale=1;                                  // zoom
-let shiftPanning=false, shiftPanStart={x:0,y:0};  // shift+left-click pan-all
 let collapsedNodes=new Set();                 // ids of collapsed parents
 let ctrlDragging=false;                       // ctrl+drag moves children too
 let hoveredNodeId=null;                       // node currently hovered
@@ -959,7 +958,7 @@ function applyHoverHighlight(){
   // While a node is being dragged, its position updates one frame behind the
   // browser's mouse hit-test, which was causing hover-enter/leave to fire
   // repeatedly and the highlight to flicker on/off. Suppress it during drag.
-  if(dragNode!==null||isPanning||shiftPanning)return;
+  if(dragNode!==null||isPanning)return;
   if(hoveredNodeId===null)return;
 
   const parentIds=new Set(edges.filter(e=>e.to===hoveredNodeId).map(e=>e.from));
@@ -1525,21 +1524,12 @@ edgeModal.addEventListener('keydown',e=>{
 });
 
 // ── Canvas pan & zoom ────────────────────────────────────
-// Shift+left-click anywhere: pan all nodes (world-space shift)
 // Plain left-click on empty canvas: pan viewport
 // Wheel: zoom around cursor
 
 canvas.addEventListener('mousedown',e=>{
   if(e.button!==0)return;
   if(isAnyModalOpen())return;
-  if(e.shiftKey){
-    // shift+left-click: move all nodes in world space
-    e.preventDefault();
-    shiftPanning=true;
-    shiftPanStart={x:e.clientX,y:e.clientY};
-    canvas.classList.add('grabbing');
-    return;
-  }
   if((e.ctrlKey||e.metaKey)&&!e.target.closest('.node-el')&&!e.target.closest('.img-node-el')&&!e.target.closest('.modal-box')){
     e.preventDefault();
     const rect=canvas.getBoundingClientRect();
@@ -1557,18 +1547,9 @@ canvas.addEventListener('mousedown',e=>{
   }
 });
 canvas.addEventListener('mousemove',e=>{
-  if(shiftPanning){
-    const dx=(e.clientX-shiftPanStart.x)/scale;
-    const dy=(e.clientY-shiftPanStart.y)/scale;
-    nodes.forEach(n=>{n.x+=dx;n.y+=dy;});
-    shiftPanStart={x:e.clientX,y:e.clientY};
-    renderAll();
-    return;
-  }
   if(isPanning){panX=e.clientX-panStart.x;panY=e.clientY-panStart.y;renderAll();}
 });
 canvas.addEventListener('mouseup',e=>{
-  if(shiftPanning){shiftPanning=false;pushHistory();}
   isPanning=false;canvas.classList.remove('grabbing');
 });
 
@@ -1583,7 +1564,7 @@ canvas.addEventListener('wheel',e=>{
   const mx=e.clientX-rect.left;
   const my=e.clientY-rect.top;
   const zoomFactor=e.deltaY<0?1.1:1/1.1;
-  const newScale=Math.min(4,Math.max(0.2,scale*zoomFactor));
+  const newScale=Math.min(4,Math.max(0.1,scale*zoomFactor));
   // adjust pan so point under cursor stays fixed
   panX=mx-(mx-panX)*(newScale/scale);
   panY=my-(my-panY)*(newScale/scale);
@@ -2034,7 +2015,7 @@ document.addEventListener('keydown',e=>{
     const rect=canvas.getBoundingClientRect();
     const mx=rect.width/2, my=rect.height/2;
     const zoomFactor=e.key==='ArrowUp'?1.15:1/1.15;
-    const newScale=Math.min(4,Math.max(0.2,scale*zoomFactor));
+    const newScale=Math.min(4,Math.max(0.1,scale*zoomFactor));
     panX=mx-(mx-panX)*(newScale/scale);
     panY=my-(my-panY)*(newScale/scale);
     scale=newScale;
@@ -2352,6 +2333,7 @@ document.getElementById('search-input').addEventListener('keydown',function(e){
   }
   if(e.key==='Escape'){
     this.value='';searchResults=[];searchIdx=0;updateSearchUI();renderAll();this.blur();
+    if(resetSearchFilters())showToast('🔄 検索フィルターをデフォルトに戻しました');
   }
 });
 document.getElementById('search-next').addEventListener('click',()=>{
@@ -2398,6 +2380,18 @@ Object.keys(searchFilterCheckboxMap).forEach(id=>{
     if(q)doSearch(q);
   });
 });
+// Resets all 4 search filters to their default (all ON). Returns true if
+// anything actually changed, so callers can decide whether to notify.
+function resetSearchFilters(){
+  const defaults={textNode:true,imageNode:true,tags:true,status:true};
+  const changed=Object.keys(defaults).some(k=>searchFilters[k]!==defaults[k]);
+  Object.assign(searchFilters,defaults);
+  Object.keys(searchFilterCheckboxMap).forEach(id=>{
+    document.getElementById(id).checked=searchFilters[searchFilterCheckboxMap[id]];
+  });
+  updateSearchFilterBtnState();
+  return changed;
+}
 document.addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&e.key==='f'&&!e.shiftKey){
     e.preventDefault();
@@ -2888,7 +2882,7 @@ canvas.addEventListener('wheel',e=>{
   const rect=canvas.getBoundingClientRect();
   const mx=e.clientX-rect.left,my=e.clientY-rect.top;
   const z=e.deltaY<0?1.1:1/1.1;
-  const ns=Math.min(4,Math.max(0.2,scale*z));
+  const ns=Math.min(4,Math.max(0.1,scale*z));
   panX=mx-(mx-panX)*(ns/scale);panY=my-(my-panY)*(ns/scale);scale=ns;renderAll();
 },{passive:false});
 canvas.addEventListener('contextmenu',e=>{
@@ -3041,7 +3035,7 @@ document.getElementById('search-input').addEventListener('input',function(){
 });
 document.getElementById('search-input').addEventListener('keydown',function(e){
   if(e.key==='Enter'){e.preventDefault();if(!sResults.length)return;sIdx=(sIdx+1)%sResults.length;centerOn(sResults[sIdx]);updateSearchUI();}
-  if(e.key==='Escape'){this.value='';sResults=[];sIdx=0;updateSearchUI();renderAll();this.blur();}
+  if(e.key==='Escape'){this.value='';sResults=[];sIdx=0;updateSearchUI();renderAll();this.blur();if(resetSearchFilters())showToast('🔄 検索フィルターをデフォルトに戻しました');}
 });
 document.getElementById('search-next').addEventListener('click',()=>{if(!sResults.length)return;sIdx=(sIdx+1)%sResults.length;centerOn(sResults[sIdx]);updateSearchUI();});
 document.getElementById('search-prev').addEventListener('click',()=>{if(!sResults.length)return;sIdx=(sIdx-1+sResults.length)%sResults.length;centerOn(sResults[sIdx]);updateSearchUI();});
@@ -3074,6 +3068,16 @@ Object.keys(searchFilterCheckboxMap).forEach(id=>{
     if(q)doSearch(q);
   });
 });
+function resetSearchFilters(){
+  const defaults={textNode:true,imageNode:true,tags:true,status:true};
+  const changed=Object.keys(defaults).some(k=>searchFilters[k]!==defaults[k]);
+  Object.assign(searchFilters,defaults);
+  Object.keys(searchFilterCheckboxMap).forEach(id=>{
+    document.getElementById(id).checked=searchFilters[searchFilterCheckboxMap[id]];
+  });
+  updateSearchFilterBtnState();
+  return changed;
+}
 document.addEventListener('keydown',e=>{
   if(e.target.tagName==='INPUT')return;
   if((e.ctrlKey||e.metaKey)&&e.key==='f'){e.preventDefault();document.getElementById('search-input').focus();}
