@@ -222,7 +222,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | N/B: 次/前の接続グループの最若IDノードを中央へ | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.08</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.09</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -1574,6 +1574,10 @@ canvas.addEventListener('mouseup',e=>{
 
 // Wheel zoom (zoom toward cursor)
 canvas.addEventListener('wheel',e=>{
+  // While a modal is open (e.g. the image-node comment textarea), let the
+  // wheel scroll that element natively instead of zooming the canvas
+  // underneath it.
+  if(isAnyModalOpen())return;
   e.preventDefault();
   const rect=canvas.getBoundingClientRect();
   const mx=e.clientX-rect.left;
@@ -2872,7 +2876,14 @@ canvas.addEventListener('mousedown',e=>{
 });
 canvas.addEventListener('mousemove',e=>{if(isPanning){panX=e.clientX-panStart.x;panY=e.clientY-panStart.y;renderAll();}});
 canvas.addEventListener('mouseup',()=>{isPanning=false;canvas.classList.remove('grabbing');});
+function isAnyModalOpen(){
+  return ['attr-modal','tag-status-overlay'].some(id=>{
+    const el=document.getElementById(id);
+    return el&&el.classList.contains('show');
+  });
+}
 canvas.addEventListener('wheel',e=>{
+  if(isAnyModalOpen())return;
   e.preventDefault();
   const rect=canvas.getBoundingClientRect();
   const mx=e.clientX-rect.left,my=e.clientY-rect.top;
@@ -2883,7 +2894,7 @@ canvas.addEventListener('wheel',e=>{
 canvas.addEventListener('contextmenu',e=>{
   if(!e.target.closest('.node-el')&&!e.target.closest('.img-node-el')){
     e.preventDefault();
-    if(document.getElementById('tag-status-overlay').classList.contains('show'))return;
+    if(isAnyModalOpen())return;
     showTagStatusOverlay();
   }
 });
