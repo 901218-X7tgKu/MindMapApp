@@ -222,7 +222,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.15</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.16</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -1210,15 +1210,35 @@ function startInlineEdit(n){
     const r=box.getBoundingClientRect();
     const sz=calcSize(ta.value);
     const totalW=sz.w+PAD_H, totalH=sz.h+PAD_V;
-    ta.style.width=sz.w+'px';
-    ta.style.height=sz.h+'px';
-    ta.style.left=(r.left+r.width/2 - totalW/2)+'px';
-    ta.style.top=(r.top+r.height/2 - totalH/2)+'px';
+
+    // Cap the textarea to a fraction of the viewport so it can never grow
+    // larger than the screen. Beyond the cap it scrolls internally — the
+    // browser's native textarea behaviour keeps the caret in view as the
+    // user types, which is what actually solves the "can't see what I'm
+    // typing" problem for very long/tall content.
+    const maxTotalW=Math.max(240, window.innerWidth*0.8);
+    const maxTotalH=Math.max(120, window.innerHeight*0.7);
+    const clampedTotalW=Math.min(totalW,maxTotalW);
+    const clampedTotalH=Math.min(totalH,maxTotalH);
+    ta.style.width=(clampedTotalW-PAD_H)+'px';
+    ta.style.height=(clampedTotalH-PAD_V)+'px';
+    ta.style.overflow=(clampedTotalW<totalW||clampedTotalH<totalH)?'auto':'hidden';
+
+    // Keep the whole box within the viewport (small margin from the edges)
+    const margin=8;
+    let left=r.left+r.width/2 - clampedTotalW/2;
+    let top=r.top+r.height/2 - clampedTotalH/2;
+    left=Math.min(Math.max(left,margin), window.innerWidth-clampedTotalW-margin);
+    top=Math.min(Math.max(top,margin), window.innerHeight-clampedTotalH-margin);
+    ta.style.left=left+'px';
+    ta.style.top=top+'px';
   }
 
   positionTA();
   ta.focus();
   ta.selectionStart=ta.selectionEnd=ta.value.length;
+  ta.scrollTop=ta.scrollHeight;
+  ta.scrollLeft=ta.scrollWidth;
   function commit(){
     ruler.remove();
     ta.remove();
