@@ -222,7 +222,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.14</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.15</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -2068,6 +2068,34 @@ document.addEventListener('keydown',e=>{
     copiedNode=null; // a tree copy supersedes any previously copied single node
     showToast(`✓ ノードツリーをコピーしました（${treeNodes.length}個）`);
     e.preventDefault();
+  }
+
+  // Ctrl+X: cut selected node (copy, then delete it)
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='x'&&!e.shiftKey){
+    if(selected===null)return;
+    const src=nodes.find(n=>n.id===selected);
+    if(!src)return;
+    e.preventDefault();
+    copiedNode=JSON.parse(JSON.stringify(src)); // deep copy
+    copiedTree=null; // a plain single-node copy supersedes any previously copied tree
+    deleteNode(src);
+    showToast('✂ ノードを切り取りました');
+  }
+
+  // Ctrl+Shift+X: cut selected node together with its entire descendant subtree
+  if((e.ctrlKey||e.metaKey)&&e.shiftKey&&e.key.toLowerCase()==='x'){
+    if(selected===null)return;
+    const src=nodes.find(n=>n.id===selected);
+    if(!src)return;
+    e.preventDefault();
+    const idSet=new Set(getAllDescendantIds(src.id));
+    idSet.add(src.id);
+    const treeNodes=nodes.filter(n=>idSet.has(n.id)).map(n=>JSON.parse(JSON.stringify(n)));
+    const treeEdges=edges.filter(ed=>idSet.has(ed.from)&&idSet.has(ed.to)).map(ed=>JSON.parse(JSON.stringify(ed)));
+    copiedTree={rootId:src.id,nodes:treeNodes,edges:treeEdges};
+    copiedNode=null; // a tree copy supersedes any previously copied single node
+    deleteNodeWithDescendants(src);
+    showToast(`✂ ノードツリーを切り取りました（${treeNodes.length}個）`);
   }
 
 });
