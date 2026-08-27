@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>マインドマップ</title>
+<link id="favicon" rel="icon" href="data:image/svg+xml,<svg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'><text%20y='.9em'%20font-size='90'>%F0%9F%97%BA%EF%B8%8F</text></svg>">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -226,7 +227,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.18</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.19</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -2627,7 +2628,7 @@ function loadMap(data, mode, successMsg){
     nodesLayer.querySelectorAll('.node-el,.img-node-el').forEach(e=>e.remove());
     nodes=result.nodes;edges=result.edges;nodeId=result.nodeId;
     collapsedNodes=new Set(collapsed);
-    if(loadedTitle){document.getElementById('map-title-text').textContent=loadedTitle;document.title='🗺 '+loadedTitle;}
+    if(loadedTitle){document.getElementById('map-title-text').textContent=loadedTitle;document.title=loadedTitle;}
     // Shift all nodes so the topmost is at least 20px below top of canvas (world-space)
     if(nodes.length>0){
       const minY=Math.min(...nodes.map(n=>n.y));
@@ -3377,7 +3378,8 @@ renderAll();
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🗺 ${escHtmlStr(title)}</title>
+<title>${escHtmlStr(title)}</title>
+<link rel="icon" href="data:image/svg+xml,<svg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'><text%20y='.9em'%20font-size='90'>%F0%9F%8C%90</text></svg>">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -3466,7 +3468,7 @@ button.active{background:var(--color-background-info);border-color:var(--color-b
 <body>
 <div id="app">
   <div id="header">
-    <h1>🗺 ${escHtmlStr(title)}</h1>
+    <h1>🌐 ${escHtmlStr(title)}</h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">クリック: 展開/折り畳み | 右クリック: タグ・ステータスを確認 | Ctrl+Shift+右クリック: URLを開く | ホイール: ズーム | ドラッグ: 移動 | WASD: スクロール | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | Ctrl+Shift+クリック: 同じ内容のノードへジャンプ</span>
     <button id="btn-theme" style="margin-left:8px;padding:4px 10px"><i id="theme-icon" class="ti ti-moon"></i> <span id="theme-label">ダーク</span></button>
   </div>
@@ -3624,7 +3626,7 @@ window.addEventListener('beforeunload',e=>{
   titleEl.addEventListener('blur',()=>{
     titleEl.contentEditable='false';
     // update document title
-    document.title='🗺 '+titleEl.textContent.trim();
+    document.title=titleEl.textContent.trim();
   });
 })();
 
