@@ -215,6 +215,10 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
 .node-box.has-children.collapsed::after{content:'▶▶';}
 /* Hidden (collapsed child) nodes */
 .node-el.hidden,.img-node-el.hidden{display:none!important;}
+/* Private node indicator (edit HTML only; private nodes never reach the public HTML) */
+.node-box{position:relative;}
+.img-node-wrap{position:relative;}
+.private-badge{position:absolute;top:-8px;right:-8px;width:20px;height:20px;border-radius:50%;background:var(--color-background-primary);border:1px solid var(--color-border-secondary);display:flex;align-items:center;justify-content:center;font-size:11px;box-shadow:0 1px 3px rgba(0,0,0,.15);pointer-events:none;}
 </style>
 </head>
 <body>
@@ -222,7 +226,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.17</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.18</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -352,6 +356,10 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
             <input type="text" id="node-modal-tags" class="attr-input" placeholder="#タグA#タグB#タグC" autocomplete="off">
             <p class="attr-label"><span>ステータス</span><span class="hint">1つのみ設定可</span></p>
             <input type="text" id="node-modal-status" class="attr-input" placeholder="例: 完了" autocomplete="off">
+            <p class="attr-label"><span>公開設定</span><span class="hint">ONの場合、このノードと子孫ノードは公開用HTMLに一切含まれません</span></p>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;font-weight:400;padding:2px 0">
+              <input type="checkbox" id="node-modal-private"> 非公開にする（子孫ノードも含む）
+            </label>
           </div>
         </div>
         <div class="modal-actions">
@@ -528,9 +536,9 @@ function serialize(){
     }
   });
   nodes.forEach(n=>{
-    const url=n.url||'', tags=n.tags||[], status=n.status||'';
-    if(url||tags.length||status){
-      lines.push(`ATTR ${n.id} ${encodeURIComponent(url)}|${encodeURIComponent(tags.join(','))}|${encodeURIComponent(status)}`);
+    const url=n.url||'', tags=n.tags||[], status=n.status||'', priv=n.private===true;
+    if(url||tags.length||status||priv){
+      lines.push(`ATTR ${n.id} ${encodeURIComponent(url)}|${encodeURIComponent(tags.join(','))}|${encodeURIComponent(status)}|${priv?1:0}`);
     }
   });
   nodes.forEach(n=>{
@@ -580,7 +588,8 @@ function deserialize(text){
         attrsMap[+m[1]]={
           url:decodeURIComponent(parts[0]||''),
           tags:decodeURIComponent(parts[1]||'').split(',').filter(Boolean),
-          status:decodeURIComponent(parts[2]||'')
+          status:decodeURIComponent(parts[2]||''),
+          private:parts[3]==='1'
         };
       }
     } else if(line.startsWith('IMGCMT ')){
@@ -616,6 +625,7 @@ function deserialize(text){
     n.url=a?a.url:'';
     n.tags=a?a.tags:[];
     n.status=a?a.status:'';
+    n.private=a?a.private:false;
     if(n.type==='image'){
       n.showComment=showCommentMap.hasOwnProperty(n.id)?showCommentMap[n.id]:true;
     }
@@ -696,7 +706,8 @@ function renderTextNode(n){
   // white-space:pre keeps each line intact (no wrapping), width grows to fit longest line
   const multiline=n.text.includes('\n');
   const wsStyle=multiline?'white-space:pre;text-align:left':'white-space:nowrap;text-align:center';
-  el.innerHTML=`<div class="node-box${n.isRoot?' root':''}${selected===n.id||isPending?' selected':''}${hc?' has-children':''}${isCollapsed?' collapsed':''}${srchCls?' '+srchCls:''}" style="background:${c.bg};border-color:${isPending?'var(--color-text-info)':c.border};color:${c.text};${wsStyle}">${formatNodeText(n.text)}</div>`;
+  const lockBadge=n.private?'<div class="private-badge">🔒</div>':'';
+  el.innerHTML=`<div class="node-box${n.isRoot?' root':''}${selected===n.id||isPending?' selected':''}${hc?' has-children':''}${isCollapsed?' collapsed':''}${srchCls?' '+srchCls:''}" style="background:${c.bg};border-color:${isPending?'var(--color-text-info)':c.border};color:${c.text};${wsStyle}">${formatNodeText(n.text)}${lockBadge}</div>`;
   const box=el.querySelector('.node-box');
   if(box)box.style.display='inline-block';
 }
@@ -731,9 +742,11 @@ function renderImgNode(n){
   function buildHtml(dispW,dispH){
     const imgRadius=showComment?'12px 12px 0 0':'12px';
     const caption=showComment?`<div class="img-node-caption">${capText}</div>`:'';
+    const lockBadge=n.private?'<div class="private-badge">🔒</div>':'';
     return `<div class="img-node-wrap${selected===n.id||isPending?' selected':''}" style="width:${dispW}px;border-color:${isPending?'var(--color-text-info)':''}">
     <img src="${n.src}" alt="image node" draggable="false" style="width:${dispW}px;height:${dispH}px;object-fit:contain;border-radius:${imgRadius}">
     ${caption}
+    ${lockBadge}
   </div>`;
   }
   if(n.naturalW&&n.naturalH){
@@ -1015,11 +1028,11 @@ function applyHoverHighlight(){
 }
 
 function makeTextNode(text,x,y,colorIdx=0,isRoot=false){
-  const n={id:nodeId++,type:'text',text,x,y,colorIdx,isRoot,url:'',tags:[],status:''};
+  const n={id:nodeId++,type:'text',text,x,y,colorIdx,isRoot,url:'',tags:[],status:'',private:false};
   nodes.push(n);createNodeEl(n);renderNode(n);renderEdges();return n;
 }
 function makeImgNode(src,x,y,comment='',width=0){
-  const n={id:nodeId++,type:'image',src,x,y,comment,width,showComment:true,naturalW:0,naturalH:0,url:'',tags:[],status:''};
+  const n={id:nodeId++,type:'image',src,x,y,comment,width,showComment:true,naturalW:0,naturalH:0,url:'',tags:[],status:'',private:false};
   nodes.push(n);createImgNodeEl(n);renderNode(n);renderEdges();return n;
 }
 // ── Tag parsing helpers ────────────────────────────────────
@@ -1455,6 +1468,7 @@ const nodeModalShowComment=document.getElementById('node-modal-show-comment');
 const nodeModalUrl=document.getElementById('node-modal-url');
 const nodeModalTags=document.getElementById('node-modal-tags');
 const nodeModalStatus=document.getElementById('node-modal-status');
+const nodeModalPrivate=document.getElementById('node-modal-private');
 function openNodeModal(n){
   editingNode=n;
   selected=n.id;renderAll();
@@ -1482,6 +1496,7 @@ function openNodeModal(n){
   nodeModalUrl.value=n.url||'';
   nodeModalTags.value=tagsToInputString(n.tags);
   nodeModalStatus.value=n.status||'';
+  nodeModalPrivate.checked=n.private===true;
   nodeModal.classList.remove('closing');
   nodeModal.classList.add('show');
   (isImg?nodeModalText:nodeModalUrl).focus();
@@ -1516,6 +1531,7 @@ function saveNodeModal(){
   n.url=nodeModalUrl.value.trim();
   n.tags=parseTagsInput(nodeModalTags.value);
   n.status=nodeModalStatus.value.trim();
+  n.private=nodeModalPrivate.checked;
   closeOverlay(nodeModal);
   pushHistory();renderAll();
 }
@@ -2660,7 +2676,29 @@ document.getElementById('modal-load-append').addEventListener('click',()=>{
 // ── Public HTML export ────────────────────────────────────
 function generatePublicHtml(){
   const title=document.getElementById('map-title-text').textContent.trim()||'マインドマップ';
-  const mapData=serialize();
+
+  // Private nodes—and their entire descendant subtree—must be completely
+  // excluded from the exported data (not merely hidden by CSS/JS), so that
+  // the content isn't visible even by opening the public HTML file as plain
+  // text (e.g. in a text editor).
+  const excludedIds=new Set();
+  nodes.forEach(n=>{
+    if(n.private===true){
+      excludedIds.add(n.id);
+      getAllDescendantIds(n.id).forEach(id=>excludedIds.add(id));
+    }
+  });
+  const origNodes=nodes, origEdges=edges, origCollapsed=collapsedNodes;
+  let mapData;
+  if(excludedIds.size>0){
+    nodes=nodes.filter(n=>!excludedIds.has(n.id));
+    edges=edges.filter(e=>!excludedIds.has(e.from)&&!excludedIds.has(e.to));
+    collapsedNodes=new Set([...collapsedNodes].filter(id=>!excludedIds.has(id)));
+    mapData=serialize();
+    nodes=origNodes; edges=origEdges; collapsedNodes=origCollapsed;
+  } else {
+    mapData=serialize();
+  }
   const isDarkNow=isDark();
 
   const publicScript=`
