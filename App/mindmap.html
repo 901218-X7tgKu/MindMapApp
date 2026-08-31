@@ -227,7 +227,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.19</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.20</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -372,7 +372,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
 
     <!-- Edge comment modal -->
     <div id="edge-modal" class="modal-overlay">
-      <div class="modal-box" style="width:380px">
+      <div class="modal-box" style="width:480px">
         <h3>エッジの設定</h3>
         <div>
           <div class="edge-style-label">線の種類</div>
@@ -388,6 +388,12 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
             </button>
             <button type="button" class="edge-style-opt" data-style="dashed" title="破線（矢印なし）">
               <svg width="40" height="14" viewBox="0 0 40 14"><line x1="2" y1="7" x2="38" y2="7" stroke="currentColor" stroke-width="2" stroke-dasharray="5,4"/></svg>
+            </button>
+            <button type="button" class="edge-style-opt" data-style="both-arrow" title="実線＋両矢印">
+              <svg width="40" height="14" viewBox="0 0 40 14"><line x1="12" y1="7" x2="28" y2="7" stroke="currentColor" stroke-width="2"/><path d="M12 3 L4 7 L12 11 Z" fill="currentColor"/><path d="M28 3 L36 7 L28 11 Z" fill="currentColor"/></svg>
+            </button>
+            <button type="button" class="edge-style-opt" data-style="both-dashed-arrow" title="破線＋両矢印">
+              <svg width="40" height="14" viewBox="0 0 40 14"><line x1="12" y1="7" x2="28" y2="7" stroke="currentColor" stroke-width="2" stroke-dasharray="5,4"/><path d="M12 3 L4 7 L12 11 Z" fill="currentColor"/><path d="M28 3 L36 7 L28 11 Z" fill="currentColor"/></svg>
             </button>
           </div>
         </div>
@@ -600,7 +606,7 @@ function deserialize(text){
       const m=line.match(/^EDGE (\d+) (\d+)(?: (.*))?$/);
       if(m){
         const ed={from:+m[1],to:+m[2]};
-        const STYLE_KEYWORDS=['dashed-arrow','solid','dashed'];
+        const STYLE_KEYWORDS=['dashed-arrow','solid','dashed','both-arrow','both-dashed-arrow'];
         let rest=m[3]||'';
         if(rest){
           const parts=rest.split(' ');
@@ -894,46 +900,47 @@ function edgeLabelPoint(p0x,p0y,p1x,p1y,p2x,p2y,rectA,rectB){
 }
 function renderEdges(){
   svgEl.querySelectorAll('.edge,.edge-label,.edge-hit').forEach(p=>p.remove());
-  edges.forEach(e=>{
-    const a=nodes.find(n=>n.id===e.from),b=nodes.find(n=>n.id===e.to);
-    if(!a||!b)return;
-    if(!isNodeVisible(a.id)||!isNodeVisible(b.id))return;
-    const style=e.style||'arrow';
-    const hasArrow=(style==='arrow'||style==='dashed-arrow');
-    const ax=a.x*scale+panX,ay=a.y*scale+panY,bx=b.x*scale+panX,by=b.y*scale+panY;
-    // Precise offset: parametric intersection of direction vector with node bounding rect.
-    // Styles without an arrowhead need no clearance — they connect the node
-    // centers directly (the node boxes render on top and hide the overlap).
-    let ex=bx, ey=by;
-    const bEl=document.getElementById('node-'+b.id);
-    let bRect=null;
-    if(bEl){
-      const r=bEl.getBoundingClientRect();
+  // Draws one visible+hit path segment from a fixed start point out to a
+  // real node's center, offsetting the endpoint for arrowhead clearance
+  // (parametric intersection with the node's bounding rect) exactly like
+  // the app has always done for single-arrow edges. Returns the clipped
+  // endpoint and the target's rect (for label placement). Both-end-arrow
+  // edges reuse this twice — once per node, both starting from the shared
+  // midpoint — instead of a special curve formula, so alignment cases
+  // (nodes sharing an x or y) reduce to a straight line automatically,
+  // exactly like every other edge type already does, and no arrowhead ever
+  // needs "start" clearance/orientation handling.
+  function drawSegment(sx,sy,targetNode,hasArrow,dashArr,strokeW,style,e,fixedEnd){
+    const tx=targetNode.x*scale+panX, ty=targetNode.y*scale+panY;
+    let ex=tx, ey=ty;
+    const tEl=document.getElementById('node-'+targetNode.id);
+    let rect=null;
+    if(tEl){
+      const r=tEl.getBoundingClientRect();
       const hw=r.width/2+4, hh=r.height/2+4; // +4px clearance
-      bRect={cx:bx,cy:by,hw,hh};
-      if(hasArrow){
+      rect={cx:tx,cy:ty,hw,hh};
+      if(fixedEnd){
+        // Both-end-arrow edges pass in the exact clip point already computed
+        // (and made mutually consistent) by bothArrowGeometry, instead of
+        // letting this function derive its own clearance independently —
+        // two separate clearance calculations for the same node could
+        // otherwise disagree slightly and collapse the visible segment.
+        ex=fixedEnd.x; ey=fixedEnd.y;
+      } else if(hasArrow){
         let offset=10;
-        const dx=bx-ax, dy=by-ay;
+        const dx=tx-sx, dy=ty-sy;
         if(Math.abs(dx)>0.001||Math.abs(dy)>0.001){
-          const tx=hw/Math.abs(dx), ty=hh/Math.abs(dy);
-          const t=Math.min(tx,ty);
+          const txr=hw/Math.abs(dx), tyr=hh/Math.abs(dy);
+          const t=Math.min(txr,tyr);
           offset=t*Math.sqrt(dx*dx+dy*dy);
         }
-        offset=Math.min(offset,Math.sqrt((bx-ax)**2+(by-ay)**2)*0.8);
+        offset=Math.min(offset,Math.sqrt((tx-sx)**2+(ty-sy)**2)*0.8);
         const dist=Math.sqrt(dx*dx+dy*dy)||1;
-        ex=bx-(dx/dist)*offset; ey=by-(dy/dist)*offset;
+        ex=tx-(dx/dist)*offset; ey=ty-(dy/dist)*offset;
       }
     }
-    const mx=(ax+ex)/2;
-    const aEl=document.getElementById('node-'+a.id);
-    let aRect=null;
-    if(aEl){
-      const r=aEl.getBoundingClientRect();
-      aRect={cx:ax,cy:ay,hw:r.width/2+4,hh:r.height/2+4};
-    }
-    const dAttr=`M${ax} ${ay} Q${mx} ${ay} ${ex} ${ey}`;
-    const strokeW=1.5*scale;
-    const dashArr=(style==='dashed'||style==='dashed-arrow')?(5*scale)+','+(4*scale):null;
+    const mx=(sx+ex)/2;
+    const dAttr=`M${sx} ${sy} Q${mx} ${sy} ${ex} ${ey}`;
     const path=document.createElementNS('http://www.w3.org/2000/svg','path');
     path.setAttribute('d',dAttr);
     path.setAttribute('fill','none');
@@ -946,6 +953,7 @@ function renderEdges(){
     path.dataset.style=style;
     path.dataset.baseWidth=String(strokeW);
     path.dataset.arrow=hasArrow?'1':'0';
+    path.dataset.arrowStart='0';
     if(hasArrow)path.setAttribute('marker-end','url(#arr)');
     svgEl.appendChild(path);
     // Wide invisible hit-area on top of the thin visible line, so right-click
@@ -962,26 +970,96 @@ function renderEdges(){
     hit.dataset.to=String(e.to);
     hit.addEventListener('contextmenu',evt=>onEdgeRightClick(evt,e));
     svgEl.appendChild(hit);
+    return {ex,ey,rect,mx};
+  }
+  // Balanced meeting point between two nodes for both-end-arrow edges, plus
+  // the exact clip point each node's own segment should end at. Each node's
+  // own "reach" toward the other — how far its rect-intersection clearance
+  // extends along the line — is computed independently; if the two reaches
+  // would overlap (a large node's own half-size can exceed the gap to a
+  // small neighbor), both are scaled down by the same factor so they meet
+  // exactly rather than one swallowing the other's exit point. Returning the
+  // resulting exitA/exitB here (for drawSegment to use directly via
+  // fixedEnd) keeps this single calculation as the sole source of truth —
+  // letting drawSegment re-derive its own clearance from the already-placed
+  // midpoint could subtract clearance twice and collapse a segment to
+  // near-nothing right at the tight end.
+  function bothArrowGeometry(ax,ay,bx,by,aId,bId){
+    const dx=bx-ax, dy=by-ay;
+    const dist=Math.sqrt(dx*dx+dy*dy)||1;
+    function reach(nodeId){
+      const el=document.getElementById('node-'+nodeId);
+      if(!el)return 0;
+      const r=el.getBoundingClientRect();
+      const hw=r.width/2+4, hh=r.height/2+4;
+      if(Math.abs(dx)<=0.001&&Math.abs(dy)<=0.001)return 0;
+      const tx=hw/Math.abs(dx), ty=hh/Math.abs(dy);
+      return Math.min(tx,ty)*dist;
+    }
+    let offA=reach(aId), offB=reach(bId);
+    const total=offA+offB;
+    if(total>dist){
+      const s=dist/total;
+      offA*=s; offB*=s;
+    }
+    const ux=dx/dist, uy=dy/dist;
+    return {
+      mid:{x:ax+ux*((offA+(dist-offB))/2), y:ay+uy*((offA+(dist-offB))/2)},
+      exitA:{x:ax+ux*offA, y:ay+uy*offA},
+      exitB:{x:bx-ux*offB, y:by-uy*offB}
+    };
+  }
+  function appendLabel(lx,ly,e){
+    const text=document.createElementNS('http://www.w3.org/2000/svg','text');
+    text.setAttribute('x',String(lx));
+    text.setAttribute('y',String(ly));
+    text.setAttribute('text-anchor','middle');
+    text.setAttribute('dominant-baseline','middle');
+    text.setAttribute('font-size',String(11*scale));
+    text.setAttribute('font-family','var(--font-sans)');
+    text.setAttribute('fill','var(--color-text-primary)');
+    text.setAttribute('stroke','var(--color-background-primary)');
+    text.setAttribute('stroke-width',String(3*scale));
+    text.setAttribute('paint-order','stroke');
+    text.setAttribute('class','edge-label');
+    text.style.pointerEvents='auto';
+    text.dataset.from=String(e.from);
+    text.dataset.to=String(e.to);
+    text.textContent=e.label;
+    text.addEventListener('contextmenu',evt=>onEdgeRightClick(evt,e));
+    svgEl.appendChild(text);
+  }
+  edges.forEach(e=>{
+    const a=nodes.find(n=>n.id===e.from),b=nodes.find(n=>n.id===e.to);
+    if(!a||!b)return;
+    if(!isNodeVisible(a.id)||!isNodeVisible(b.id))return;
+    const style=e.style||'arrow';
+    const isBoth=(style==='both-arrow'||style==='both-dashed-arrow');
+    const strokeW=1.5*scale;
+    const dashArr=(style==='dashed'||style==='dashed-arrow'||style==='both-dashed-arrow')?(5*scale)+','+(4*scale):null;
+    const ax=a.x*scale+panX, ay=a.y*scale+panY, bx=b.x*scale+panX, by=b.y*scale+panY;
+    if(isBoth){
+      // A plain center-to-center midpoint isn't symmetric once node sizes
+      // differ: a large node's own half-size can exceed the distance to a
+      // small neighbor, pulling the midpoint inside (or past) the large
+      // node and collapsing one of the two segments to near-nothing.
+      const geo=bothArrowGeometry(ax,ay,bx,by,a.id,b.id);
+      drawSegment(geo.mid.x,geo.mid.y,a,true,dashArr,strokeW,style,e,geo.exitA);
+      drawSegment(geo.mid.x,geo.mid.y,b,true,dashArr,strokeW,style,e,geo.exitB);
+      if(e.label)appendLabel(geo.mid.x,geo.mid.y,e);
+      return;
+    }
+    const hasArrowEnd=(style==='arrow'||style==='dashed-arrow');
+    const seg=drawSegment(ax,ay,b,hasArrowEnd,dashArr,strokeW,style,e);
+    let aRect=null;
+    const aEl=document.getElementById('node-'+a.id);
+    if(aEl){
+      const r=aEl.getBoundingClientRect();
+      aRect={cx:ax,cy:ay,hw:r.width/2+4,hh:r.height/2+4};
+    }
     if(e.label){
-      const [lx,ly]=edgeLabelPoint(ax,ay,mx,ay,ex,ey,aRect,bRect);
-      const text=document.createElementNS('http://www.w3.org/2000/svg','text');
-      text.setAttribute('x',String(lx));
-      text.setAttribute('y',String(ly));
-      text.setAttribute('text-anchor','middle');
-      text.setAttribute('dominant-baseline','middle');
-      text.setAttribute('font-size',String(11*scale));
-      text.setAttribute('font-family','var(--font-sans)');
-      text.setAttribute('fill','var(--color-text-primary)');
-      text.setAttribute('stroke','var(--color-background-primary)');
-      text.setAttribute('stroke-width',String(3*scale));
-      text.setAttribute('paint-order','stroke');
-      text.setAttribute('class','edge-label');
-      text.style.pointerEvents='auto';
-      text.dataset.from=String(e.from);
-      text.dataset.to=String(e.to);
-      text.textContent=e.label;
-      text.addEventListener('contextmenu',evt=>onEdgeRightClick(evt,e));
-      svgEl.appendChild(text);
+      const [lx,ly]=edgeLabelPoint(ax,ay,seg.mx,ay,seg.ex,seg.ey,aRect,seg.rect);
+      appendLabel(lx,ly,e);
     }
   });
 }
@@ -995,6 +1073,7 @@ function applyHoverHighlight(){
     const baseW=+p.dataset.baseWidth||1.5*scale;
     p.setAttribute('stroke-width', String(baseW));
     if(p.dataset.arrow==='1')p.setAttribute('marker-end','url(#arr)');
+    if(p.dataset.arrowStart==='1')p.setAttribute('marker-start','url(#arr)');
   });
   // While a node is being dragged, its position updates one frame behind the
   // browser's mouse hit-test, which was causing hover-enter/leave to fire
@@ -1024,6 +1103,7 @@ function applyHoverHighlight(){
       const baseW=+path.dataset.baseWidth||1.5*scale;
       path.setAttribute('stroke-width', String(baseW+1*scale));
       if(path.dataset.arrow==='1')path.setAttribute('marker-end','url(#arr-hover)');
+      if(path.dataset.arrowStart==='1')path.setAttribute('marker-start','url(#arr-hover)');
     }
   });
 }
@@ -2763,7 +2843,7 @@ function deserialize(text){
       const m=line.match(/^EDGE (\\d+) (\\d+)(?: (.*))?$/);
       if(m){
         const ed={from:+m[1],to:+m[2]};
-        const STYLE_KEYWORDS=['dashed-arrow','solid','dashed'];
+        const STYLE_KEYWORDS=['dashed-arrow','solid','dashed','both-arrow','both-dashed-arrow'];
         let rest=m[3]||'';
         if(rest){
           const parts=rest.split(' ');
@@ -2832,6 +2912,7 @@ function applyHoverHighlight(){
     const baseW=+p.dataset.baseWidth||1.5*scale;
     p.setAttribute('stroke-width',String(baseW));
     if(p.dataset.arrow==='1')p.setAttribute('marker-end','url(#arr)');
+    if(p.dataset.arrowStart==='1')p.setAttribute('marker-start','url(#arr)');
   });
   if(hoveredNodeId===null)return;
   const parentIds=new Set(edges.filter(e=>e.to===hoveredNodeId).map(e=>e.from));
@@ -2850,6 +2931,7 @@ function applyHoverHighlight(){
       const baseW=+path.dataset.baseWidth||1.5*scale;
       path.setAttribute('stroke-width',String(baseW+1*scale));
       if(path.dataset.arrow==='1')path.setAttribute('marker-end','url(#arr-hover)');
+      if(path.dataset.arrowStart==='1')path.setAttribute('marker-start','url(#arr-hover)');
     }
   });
 }
@@ -2996,69 +3078,112 @@ function edgeLabelPoint(p0x,p0y,p1x,p1y,p2x,p2y,rectA,rectB){
 }
 function renderEdges(){
   svgEl.querySelectorAll('.edge,.edge-label').forEach(p=>p.remove());
-  edges.forEach(e=>{
-    const a=nodes.find(n=>n.id===e.from),b=nodes.find(n=>n.id===e.to);
-    if(!a||!b||!isVisible(a.id)||!isVisible(b.id))return;
-    const style=e.style||'arrow';
-    const hasArrow=(style==='arrow'||style==='dashed-arrow');
-    const ax=a.x*scale+panX,ay=a.y*scale+panY,bx=b.x*scale+panX,by=b.y*scale+panY;
-    let ex=bx,ey=by;
-    const bEl=document.getElementById('node-'+b.id);
-    let bRect=null;
-    if(bEl){
-      const r=bEl.getBoundingClientRect();
+  function drawSegment(sx,sy,targetNode,hasArrow,dashArr,strokeW,style,e,fixedEnd){
+    const tx=targetNode.x*scale+panX, ty=targetNode.y*scale+panY;
+    let ex=tx,ey=ty;
+    const tEl=document.getElementById('node-'+targetNode.id);
+    let rect=null;
+    if(tEl){
+      const r=tEl.getBoundingClientRect();
       const hw=r.width/2+4,hh=r.height/2+4;
-      bRect={cx:bx,cy:by,hw:hw,hh:hh};
-      if(hasArrow){
+      rect={cx:tx,cy:ty,hw:hw,hh:hh};
+      if(fixedEnd){
+        ex=fixedEnd.x; ey=fixedEnd.y;
+      } else if(hasArrow){
         let offset=10;
-        const dx=bx-ax,dy=by-ay;
+        const dx=tx-sx,dy=ty-sy;
         if(Math.abs(dx)>0.001||Math.abs(dy)>0.001){
-          const tx=hw/Math.abs(dx),ty=hh/Math.abs(dy);
-          const t=Math.min(tx,ty);
+          const txr=hw/Math.abs(dx),tyr=hh/Math.abs(dy);
+          const t=Math.min(txr,tyr);
           offset=t*Math.sqrt(dx*dx+dy*dy);
         }
-        offset=Math.min(offset,Math.sqrt((bx-ax)**2+(by-ay)**2)*0.8);
+        offset=Math.min(offset,Math.sqrt((tx-sx)**2+(ty-sy)**2)*0.8);
         const dist=Math.sqrt(dx*dx+dy*dy)||1;
-        ex=bx-(dx/dist)*offset;ey=by-(dy/dist)*offset;
+        ex=tx-(dx/dist)*offset;ey=ty-(dy/dist)*offset;
       }
     }
-    const mx=(ax+ex)/2;
-    const aEl=document.getElementById('node-'+a.id);
-    let aRect=null;
-    if(aEl){
-      const r=aEl.getBoundingClientRect();
-      aRect={cx:ax,cy:ay,hw:r.width/2+4,hh:r.height/2+4};
-    }
-    const strokeW=1.5*scale;
-    const dashArr=(style==='dashed'||style==='dashed-arrow')?(5*scale)+','+(4*scale):null;
+    const mx=(sx+ex)/2;
     const path=document.createElementNS('http://www.w3.org/2000/svg','path');
-    path.setAttribute('d','M'+ax+' '+ay+' Q'+mx+' '+ay+' '+ex+' '+ey);
+    path.setAttribute('d','M'+sx+' '+sy+' Q'+mx+' '+sy+' '+ex+' '+ey);
     path.setAttribute('fill','none');path.setAttribute('stroke','var(--color-edge)');
     path.setAttribute('stroke-width',String(strokeW));path.setAttribute('class','edge');
     if(dashArr)path.setAttribute('stroke-dasharray',dashArr);
     path.dataset.from=String(e.from);path.dataset.to=String(e.to);
     path.dataset.baseWidth=String(strokeW);
     path.dataset.arrow=hasArrow?'1':'0';
+    path.dataset.arrowStart='0';
     if(hasArrow)path.setAttribute('marker-end','url(#arr)');
     svgEl.appendChild(path);
+    return {ex,ey,rect,mx};
+  }
+  function bothArrowGeometry(ax,ay,bx,by,aId,bId){
+    const dx=bx-ax, dy=by-ay;
+    const dist=Math.sqrt(dx*dx+dy*dy)||1;
+    function reach(nodeId){
+      const el=document.getElementById('node-'+nodeId);
+      if(!el)return 0;
+      const r=el.getBoundingClientRect();
+      const hw=r.width/2+4, hh=r.height/2+4;
+      if(Math.abs(dx)<=0.001&&Math.abs(dy)<=0.001)return 0;
+      const tx=hw/Math.abs(dx), ty=hh/Math.abs(dy);
+      return Math.min(tx,ty)*dist;
+    }
+    let offA=reach(aId), offB=reach(bId);
+    const total=offA+offB;
+    if(total>dist){
+      const s=dist/total;
+      offA*=s; offB*=s;
+    }
+    const ux=dx/dist, uy=dy/dist;
+    return {
+      mid:{x:ax+ux*((offA+(dist-offB))/2), y:ay+uy*((offA+(dist-offB))/2)},
+      exitA:{x:ax+ux*offA, y:ay+uy*offA},
+      exitB:{x:bx-ux*offB, y:by-uy*offB}
+    };
+  }
+  function appendLabel(lx,ly,e){
+    const text=document.createElementNS('http://www.w3.org/2000/svg','text');
+    text.setAttribute('x',String(lx));
+    text.setAttribute('y',String(ly));
+    text.setAttribute('text-anchor','middle');
+    text.setAttribute('dominant-baseline','middle');
+    text.setAttribute('font-size',String(11*scale));
+    text.setAttribute('font-family','var(--font-sans)');
+    text.setAttribute('fill','var(--color-text-primary)');
+    text.setAttribute('stroke','var(--color-background-primary)');
+    text.setAttribute('stroke-width',String(3*scale));
+    text.setAttribute('paint-order','stroke');
+    text.setAttribute('class','edge-label');
+    text.dataset.from=String(e.from);text.dataset.to=String(e.to);
+    text.textContent=e.label;
+    svgEl.appendChild(text);
+  }
+  edges.forEach(e=>{
+    const a=nodes.find(n=>n.id===e.from),b=nodes.find(n=>n.id===e.to);
+    if(!a||!b||!isVisible(a.id)||!isVisible(b.id))return;
+    const style=e.style||'arrow';
+    const isBoth=(style==='both-arrow'||style==='both-dashed-arrow');
+    const strokeW=1.5*scale;
+    const dashArr=(style==='dashed'||style==='dashed-arrow'||style==='both-dashed-arrow')?(5*scale)+','+(4*scale):null;
+    const ax=a.x*scale+panX,ay=a.y*scale+panY,bx=b.x*scale+panX,by=b.y*scale+panY;
+    if(isBoth){
+      const geo=bothArrowGeometry(ax,ay,bx,by,a.id,b.id);
+      drawSegment(geo.mid.x,geo.mid.y,a,true,dashArr,strokeW,style,e,geo.exitA);
+      drawSegment(geo.mid.x,geo.mid.y,b,true,dashArr,strokeW,style,e,geo.exitB);
+      if(e.label)appendLabel(geo.mid.x,geo.mid.y,e);
+      return;
+    }
+    const hasArrowEnd=(style==='arrow'||style==='dashed-arrow');
+    const seg=drawSegment(ax,ay,b,hasArrowEnd,dashArr,strokeW,style,e);
+    let aRect=null;
+    const aEl=document.getElementById('node-'+a.id);
+    if(aEl){
+      const r=aEl.getBoundingClientRect();
+      aRect={cx:ax,cy:ay,hw:r.width/2+4,hh:r.height/2+4};
+    }
     if(e.label){
-      const mp=edgeLabelPoint(ax,ay,mx,ay,ex,ey,aRect,bRect);
-      const lx=mp[0],ly=mp[1];
-      const text=document.createElementNS('http://www.w3.org/2000/svg','text');
-      text.setAttribute('x',String(lx));
-      text.setAttribute('y',String(ly));
-      text.setAttribute('text-anchor','middle');
-      text.setAttribute('dominant-baseline','middle');
-      text.setAttribute('font-size',String(11*scale));
-      text.setAttribute('font-family','var(--font-sans)');
-      text.setAttribute('fill','var(--color-text-primary)');
-      text.setAttribute('stroke','var(--color-background-primary)');
-      text.setAttribute('stroke-width',String(3*scale));
-      text.setAttribute('paint-order','stroke');
-      text.setAttribute('class','edge-label');
-      text.dataset.from=String(e.from);text.dataset.to=String(e.to);
-      text.textContent=e.label;
-      svgEl.appendChild(text);
+      const mp=edgeLabelPoint(ax,ay,seg.mx,ay,seg.ex,seg.ey,aRect,seg.rect);
+      appendLabel(mp[0],mp[1],e);
     }
   });
 }
