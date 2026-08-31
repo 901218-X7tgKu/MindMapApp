@@ -227,7 +227,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.20</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.21</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -672,14 +672,34 @@ function isNodeVisible(nodeId){
 }
 function toggleCollapse(n){
   if(!hasChildren(n.id))return;
-  if(collapsedNodes.has(n.id)){collapsedNodes.delete(n.id);}
-  else{collapsedNodes.add(n.id);}
+  if(collapsedNodes.has(n.id)){
+    // Expand only the direct children. Any child that itself has further
+    // children is immediately re-collapsed, so a deeper subtree doesn't pop
+    // open all at once — the user drills down one level per double-click,
+    // and each level's own expand/collapse state is otherwise preserved.
+    collapsedNodes.delete(n.id);
+    getDirectChildren(n.id).forEach(c=>{
+      if(hasChildren(c.id))collapsedNodes.add(c.id);
+    });
+  } else {
+    collapsedNodes.add(n.id);
+  }
   renderAll();
 }
 function expandAll(){collapsedNodes.clear();renderAll();}
 function collapseAll(){
   nodes.forEach(n=>{if(hasChildren(n.id))collapsedNodes.add(n.id);});
   renderAll();
+}
+function expandSelectedDescendants(){
+  if(selected==null){showToast('ノードを選択してください');return;}
+  const ids=getAllDescendantIds(selected);
+  ids.add(selected);
+  ids.forEach(id=>collapsedNodes.delete(id));
+  renderAll();
+}
+function toggleExpandCollapseAll(){
+  if(collapsedNodes.size===0){collapseAll();}else{expandAll();}
 }
 let editingNodeId=null;
 // ── Text node rendering ───────────────────────────────────
@@ -2054,8 +2074,8 @@ document.addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&e.key==='z'){e.preventDefault();undo();}
   if((e.ctrlKey||e.metaKey)&&(e.key==='y'||(e.shiftKey&&e.key==='z'))){e.preventDefault();redo();}
   if(e.shiftKey&&e.key==='N'){e.preventDefault();window.open(window.location.href,'_blank');return;}
-  if(e.shiftKey&&e.key==='Q'){e.preventDefault();expandAll();}
-  if(e.shiftKey&&e.key==='W'){e.preventDefault();collapseAll();}
+  if(e.shiftKey&&e.key==='Q'){e.preventDefault();expandSelectedDescendants();}
+  if(e.shiftKey&&e.key==='W'){e.preventDefault();toggleExpandCollapseAll();}
   if(e.shiftKey&&e.key==='D'){e.preventDefault();const f=downloadSave();showToast('✓ '+f+' を保存しました');}
   if(e.shiftKey&&e.key==='P'){e.preventDefault();const f=downloadPublicHtml();showToast('✓ '+f+' を保存しました');}
 
@@ -2886,6 +2906,21 @@ const svgEl=document.getElementById('svg-layer');
 const nodesLayer=document.getElementById('nodes-layer');
 
 function hasChildren(id){return edges.some(e=>e.from===id);}
+function getDirectChildren(id){return edges.filter(e=>e.from===id).map(e=>nodes.find(n=>n.id===e.to)).filter(Boolean);}
+function toggleNodeCollapse(n){
+  if(collapsed.has(n.id)){
+    // Expand only the direct children; any child that itself has further
+    // children is immediately re-collapsed, matching the edit HTML's
+    // one-level-at-a-time drill-down behavior.
+    collapsed.delete(n.id);
+    getDirectChildren(n.id).forEach(c=>{
+      if(hasChildren(c.id))collapsed.add(c.id);
+    });
+  } else {
+    collapsed.add(n.id);
+  }
+  renderAll();
+}
 function hasCollapsedAncestor(id,visited){
   for(const e of edges){
     if(e.to===id){
@@ -2983,8 +3018,7 @@ function renderAll(){
           e.stopPropagation();
           if((e.ctrlKey||e.metaKey)&&e.shiftKey){jumpToDuplicateNode(n);return;}
           if(!hasChildren(n.id))return;
-          if(collapsed.has(n.id))collapsed.delete(n.id);else collapsed.add(n.id);
-          renderAll();
+          toggleNodeCollapse(n);
         });
         el.addEventListener('contextmenu',e=>{
           e.preventDefault();e.stopPropagation();
@@ -2998,8 +3032,7 @@ function renderAll(){
           e.stopPropagation();
           if((e.ctrlKey||e.metaKey)&&e.shiftKey){jumpToDuplicateNode(n);return;}
           if(!hasChildren(n.id))return;
-          if(collapsed.has(n.id))collapsed.delete(n.id);else collapsed.add(n.id);
-          renderAll();
+          toggleNodeCollapse(n);
         });
         el.addEventListener('contextmenu',e=>{
           e.preventDefault();e.stopPropagation();
@@ -3434,7 +3467,7 @@ document.addEventListener('keydown',e=>{
   if(e.target.tagName==='INPUT')return;
   if((e.ctrlKey||e.metaKey)&&e.key==='f'){e.preventDefault();document.getElementById('search-input').focus();}
   if(e.shiftKey&&e.key==='Q'){sResults=[];sIdx=0;collapsed.clear();renderAll();}
-  if(e.shiftKey&&e.key==='W'){nodes.forEach(n=>{if(hasChildren(n.id))collapsed.add(n.id);});renderAll();}
+  if(e.shiftKey&&e.key==='W'){if(collapsed.size===0){nodes.forEach(n=>{if(hasChildren(n.id))collapsed.add(n.id);});}else{collapsed.clear();}renderAll();}
   if(e.key==='z'&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey){
     if(nodes.length>0){
       e.preventDefault();
