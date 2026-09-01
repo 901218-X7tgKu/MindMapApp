@@ -57,8 +57,9 @@ body.dark{
 }
 html,body{height:100%;background:var(--color-background-secondary);color:var(--color-text-primary);font-family:var(--font-sans)}
 #app{display:flex;flex-direction:column;height:100vh}
-#header{padding:10px 16px;background:var(--color-background-primary);border-bottom:0.5px solid var(--color-border-tertiary);display:flex;align-items:center;gap:10px}
+#header{padding:10px 16px;background:var(--color-background-primary);border-bottom:0.5px solid var(--color-border-tertiary);display:flex;align-items:center;gap:10px;user-select:none}
 #header h1{font-size:15px;font-weight:600;flex:1}
+#map-title-text{user-select:text}
 #canvas{flex:1;position:relative;overflow:hidden;cursor:grab;user-select:none}
 #canvas.grabbing{cursor:grabbing}
 #canvas.connecting{cursor:crosshair}
@@ -126,7 +127,7 @@ html,body{height:100%;background:var(--color-background-secondary);color:var(--c
 #canvas.dragover #drop-hint{opacity:1}
 
 /* Toolbar */
-#toolbar{display:flex;align-items:center;gap:6px;padding:8px 12px;background:var(--color-background-primary);border-top:0.5px solid var(--color-border-tertiary);flex-wrap:wrap}
+#toolbar{display:flex;align-items:center;gap:6px;padding:8px 12px;background:var(--color-background-primary);border-top:0.5px solid var(--color-border-tertiary);flex-wrap:wrap;user-select:none}
 button{font-family:var(--font-sans);font-size:12px;padding:5px 10px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-primary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:4px;transition:background .12s,transform .15s var(--ease-out),box-shadow .15s var(--ease-out)}
 button:hover:not(:disabled){background:var(--color-background-secondary);transform:translateY(-1px);box-shadow:0 3px 8px rgba(0,0,0,.1)}
 button:active:not(:disabled){transform:translateY(0) scale(.94);box-shadow:none;transition-duration:.05s}
@@ -227,7 +228,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.21</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.22</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -3565,8 +3566,9 @@ body.dark{
 }
 html,body{height:100%;background:var(--color-background-secondary);color:var(--color-text-primary);font-family:var(--font-sans)}
 #app{display:flex;flex-direction:column;height:100vh}
-#header{padding:10px 16px;background:var(--color-background-primary);border-bottom:0.5px solid var(--color-border-tertiary);display:flex;align-items:center;gap:10px}
+#header{padding:10px 16px;background:var(--color-background-primary);border-bottom:0.5px solid var(--color-border-tertiary);display:flex;align-items:center;gap:10px;user-select:none}
 #header h1{font-size:15px;font-weight:600;flex:1}
+#map-title-text{user-select:text}
 #canvas{flex:1;position:relative;overflow:hidden;cursor:grab;user-select:none}
 #canvas.grabbing{cursor:grabbing}
 #svg-layer{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
@@ -3589,7 +3591,7 @@ html,body{height:100%;background:var(--color-background-secondary);color:var(--c
 .node-box.hover-parent,.img-node-wrap.hover-parent{outline:2.5px solid #2196f3;outline-offset:3px;box-shadow:0 0 0 4px rgba(33,150,243,.15);transform:scale(1.02)}
 .node-box.hover-child,.img-node-wrap.hover-child{outline:2.5px solid #4caf50;outline-offset:3px;box-shadow:0 0 0 4px rgba(76,175,80,.15);transform:scale(1.02)}
   .edge.hover-edge{stroke:#f5a100!important;opacity:1!important;}
-#toolbar{display:flex;align-items:center;gap:6px;padding:8px 12px;background:var(--color-background-primary);border-top:0.5px solid var(--color-border-tertiary)}
+#toolbar{display:flex;align-items:center;gap:6px;padding:8px 12px;background:var(--color-background-primary);border-top:0.5px solid var(--color-border-tertiary);user-select:none}
 button{font-family:var(--font-sans);font-size:12px;padding:5px 10px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-primary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:4px;transition:background .12s,transform .15s var(--ease-out),box-shadow .15s var(--ease-out)}
 button:hover:not(:disabled){background:var(--color-background-secondary);transform:translateY(-1px);box-shadow:0 3px 8px rgba(0,0,0,.1)}
 button:active:not(:disabled){transform:translateY(0) scale(.94);box-shadow:none;transition-duration:.05s}
