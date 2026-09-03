@@ -228,7 +228,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.22</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.24</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -2095,6 +2095,15 @@ document.addEventListener('keydown',e=>{
     }
   }
 
+  // J: jump to another node with identical content (this used to live on
+  // Shift+Enter, moved here when Shift+Enter became "edit selected node")
+  if(e.key==='j'&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey){
+    if(selected!==null){
+      const cur=nodes.find(nd=>nd.id===selected);
+      if(cur){e.preventDefault();jumpToDuplicateNode(cur);}
+    }
+  }
+
   // C: reset zoom to 100% (centered on viewport)
   if(e.key==='c'&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey){
     e.preventDefault();
@@ -2274,8 +2283,8 @@ document.addEventListener('keydown',e=>{
   if(e.target.isContentEditable)return;
   if(e.target.closest&&e.target.closest('.modal-overlay'))return; // let modals (img/edge) handle their own keys
 
-  // Ctrl/Cmd+↑ / Ctrl/Cmd+↓: zoom in / out (around the viewport center)
-  if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&(e.key==='ArrowUp'||e.key==='ArrowDown')){
+  // ↑ / ↓ (no modifiers): zoom in / out (around the viewport center)
+  if((e.key==='ArrowUp'||e.key==='ArrowDown')&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey){
     e.preventDefault();
     const rect=canvas.getBoundingClientRect();
     const mx=rect.width/2, my=rect.height/2;
@@ -2288,8 +2297,8 @@ document.addEventListener('keydown',e=>{
     return;
   }
 
-  // Arrow keys (no modifiers): navigate the node tree
-  if((e.key==='ArrowUp'||e.key==='ArrowDown'||e.key==='ArrowLeft'||e.key==='ArrowRight')&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey){
+  // Ctrl/Cmd + arrow keys: navigate the node tree
+  if((e.key==='ArrowUp'||e.key==='ArrowDown'||e.key==='ArrowLeft'||e.key==='ArrowRight')&&(e.ctrlKey||e.metaKey)&&!e.shiftKey){
     if(selected===null)return;
     const cur=nodes.find(nd=>nd.id===selected);
     if(!cur)return;
@@ -2326,17 +2335,33 @@ document.addEventListener('keydown',e=>{
 
   // Enter family: edit / add child / jump to duplicate / open as link
   if(e.key==='Enter'){
+    const ctrl=e.ctrlKey||e.metaKey;
+
+    if(!ctrl&&!e.shiftKey){
+      // Enter (no modifiers): regardless of selection state, start editing
+      // whichever (visible) node is currently closest to the screen center.
+      const target=findNearestNodeToCenter();
+      if(!target)return;
+      e.preventDefault();
+      selected=target.id;
+      renderAll();
+      if(target.type==='image')openNodeModal(target);
+      else startInlineEdit(target);
+      return;
+    }
+
     if(selected===null)return;
     const cur=nodes.find(nd=>nd.id===selected);
     if(!cur)return;
-    const ctrl=e.ctrlKey||e.metaKey;
     e.preventDefault();
     if(ctrl&&e.shiftKey){
       // Ctrl+Shift+Enter: open the node's URL attribute (no-op if unset)
       openNodeLink(cur);
     } else if(e.shiftKey){
-      // Shift+Enter: jump to another node with identical content
-      jumpToDuplicateNode(cur);
+      // Shift+Enter: start editing the selected node
+      // — text nodes: inline edit; image nodes: attribute/comment modal
+      if(cur.type==='image')openNodeModal(cur);
+      else startInlineEdit(cur);
     } else if(ctrl){
       // Ctrl+Enter: add a new child node, positioned to avoid overlapping
       // the parent or its existing children, using the parent's color.
@@ -2347,11 +2372,6 @@ document.addEventListener('keydown',e=>{
       if(collapsedNodes.has(cur.id))collapsedNodes.delete(cur.id);
       selected=n.id;pushHistory();renderAll();
       setTimeout(()=>startInlineEdit(n),0);
-    } else {
-      // Enter: start editing the selected node
-      // — text nodes: inline edit; image nodes: attribute/comment modal
-      if(cur.type==='image')openNodeModal(cur);
-      else startInlineEdit(cur);
     }
     return;
   }
@@ -2559,6 +2579,23 @@ function centerOnNode(nodeId, andRender=true){
   panY=rect.height/2 - n.y*scale;
   selected=nodeId;
   if(andRender){renderAll();applySearchHighlight();}
+}
+
+// Find the (visible) node whose position is closest to the current screen
+// center, regardless of selection state. Used by the unmodified Enter key
+// to start editing "whatever is in the middle of the screen right now".
+function findNearestNodeToCenter(){
+  const rect=canvas.getBoundingClientRect();
+  const wx=(rect.width/2-panX)/scale;
+  const wy=(rect.height/2-panY)/scale;
+  let best=null,bestDist=Infinity;
+  nodes.forEach(n=>{
+    if(!isNodeVisible(n.id))return;
+    const dx=n.x-wx, dy=n.y-wy;
+    const d=dx*dx+dy*dy;
+    if(d<bestDist){bestDist=d;best=n;}
+  });
+  return best;
 }
 
 // Ctrl+Shift+click on a node: jump to another node with identical content.
