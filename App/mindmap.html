@@ -86,18 +86,30 @@ html,body{height:100%;background:var(--color-background-secondary);color:var(--c
 .img-node-caption.empty{color:var(--color-text-tertiary);font-style:italic}
 .img-node-caption input,.img-node-caption textarea{width:100%;background:none;border:none;outline:none;font-size:11px;color:var(--color-text-primary);font-family:inherit;resize:none;padding:0}
 
+/* Group nodes (containers that hold text/image nodes) */
+.group-node-el{position:absolute;transform:translate(-50%,-50%);cursor:grab;z-index:1}
+.group-node-el.spawn-in{animation:nodeSpawn .45s var(--ease-bounce) both}
+.group-box{position:relative;box-sizing:border-box;border-radius:14px;border:2.5px dashed;transition:outline .18s var(--ease-out);}
+.group-box.selected{outline:2.5px solid var(--color-text-info);outline-offset:2px}
+.group-label{position:absolute;top:-11px;left:14px;font-size:13px;font-weight:600;line-height:1.4;background:var(--color-background-primary);padding:0 5px;pointer-events:none;opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:4px}
+.group-resize-handle{position:absolute;width:14px;height:14px;background:var(--color-background-primary);border:2px solid var(--color-text-info);border-radius:4px;z-index:2;}
+.group-resize-handle.nw{top:-7px;left:-7px;cursor:nwse-resize}
+.group-resize-handle.ne{top:-7px;right:-7px;cursor:nesw-resize}
+.group-resize-handle.sw{bottom:-7px;left:-7px;cursor:nesw-resize}
+.group-resize-handle.se{bottom:-7px;right:-7px;cursor:nwse-resize}
+
 /* Hover highlight */
-.node-box.hover-self,.img-node-wrap.hover-self{
+.node-box.hover-self,.img-node-wrap.hover-self,.group-box.hover-self{
   outline:2.5px solid #f5a100;outline-offset:3px;
   box-shadow:0 0 0 4px rgba(245,161,0,.15);
   transform:scale(1.045);
 }
-.node-box.hover-parent,.img-node-wrap.hover-parent{
+.node-box.hover-parent,.img-node-wrap.hover-parent,.group-box.hover-parent{
   outline:2.5px solid #2196f3;outline-offset:3px;
   box-shadow:0 0 0 4px rgba(33,150,243,.15);
   transform:scale(1.02);
 }
-.node-box.hover-child,.img-node-wrap.hover-child{
+.node-box.hover-child,.img-node-wrap.hover-child,.group-box.hover-child{
   outline:2.5px solid #4caf50;outline-offset:3px;
   box-shadow:0 0 0 4px rgba(76,175,80,.15);
   transform:scale(1.02);
@@ -138,7 +150,6 @@ button.active{background:var(--color-background-info);border-color:var(--color-b
 button.danger:hover{background:var(--color-background-danger);color:var(--color-text-danger)}
 .sep{width:0.5px;height:20px;background:var(--color-border-tertiary);margin:0 2px;flex-shrink:0}
 .color-dot{width:11px;height:11px;border-radius:50%;display:inline-block;border:1.5px solid rgba(0,0,0,.2)}
-#hint{font-size:11px;color:var(--color-text-tertiary);margin-left:auto}
 
 /* Modals */
 .modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.45);backdrop-filter:blur(2px);z-index:200;align-items:center;justify-content:center}
@@ -194,6 +205,8 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
 .node-box.search-current{outline:3px solid #e8430a;outline-offset:3px;}
 .img-node-wrap.search-hit{outline:2.5px solid #f5a623;outline-offset:3px;}
 .img-node-wrap.search-current{outline:3px solid #e8430a;outline-offset:3px;}
+.group-box.search-hit{outline:2.5px solid #f5a623;outline-offset:3px;}
+.group-box.search-current{outline:3px solid #e8430a;outline-offset:3px;}
 #search-input:focus{border-color:var(--color-border-primary);}
 
 /* Toast */
@@ -216,7 +229,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
 .node-box.has-children::after{content:'▶';font-size:9px;margin-left:6px;opacity:.5;}
 .node-box.has-children.collapsed::after{content:'▶▶';}
 /* Hidden (collapsed child) nodes */
-.node-el.hidden,.img-node-el.hidden{display:none!important;}
+.node-el.hidden,.img-node-el.hidden,.group-node-el.hidden{display:none!important;}
 /* Private node indicator (edit HTML only; private nodes never reach the public HTML) */
 .node-box{position:relative;}
 .img-node-wrap{position:relative;}
@@ -228,7 +241,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.24</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.25</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -352,6 +365,8 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
             <textarea id="node-modal-text" class="comment-ta" placeholder="ノードのテキストを入力..."></textarea>
           </div>
           <div class="node-modal-col node-modal-col-attrs" id="node-modal-col-attrs">
+            <p class="attr-label" id="node-modal-group-title-label"><span>タイトル</span><span class="hint">グループノード左上に表示されます</span></p>
+            <input type="text" id="node-modal-group-title" class="attr-input" placeholder="グループの名前（任意）" autocomplete="off">
             <p class="attr-label"><span>URL</span><span class="hint">Ctrl+Shift+右クリックで開く／未設定なら反応しません</span></p>
             <input type="text" id="node-modal-url" class="attr-input" placeholder="https://example.com または ./page.html" autocomplete="off">
             <p class="attr-label"><span>タグ</span><span class="hint">複数可・#で区切る（例: #タグA#タグB）</span></p>
@@ -416,6 +431,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
     <button id="btn-connect"><i class="ti ti-arrow-right"></i> 接続</button>
     <button id="btn-add-img" title="画像ファイルを選択して追加"><i class="ti ti-photo-plus"></i> 画像追加</button>
     <input type="file" id="file-input" accept="image/*" style="display:none">
+    <button id="btn-add-group" title="ノードや画像ノードをまとめて入れられる枠を追加（Ctrl+Shift+クリックでも追加可）"><i class="ti ti-border-corners"></i> グループ追加</button>
     <div class="sep"></div>
     <button id="btn-c0" title="ターコイズ"><span class="color-dot" style="background:#1D9E75"></span></button>
     <button id="btn-c1" title="ブルー"><span class="color-dot" style="background:#378ADD"></span></button>
@@ -450,7 +466,6 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
         <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="filter-status" checked> ステータス</label>
       </div>
     </div>
-    <span id="hint">Ctrl+Z: Undo / Ctrl+Y: Redo</span>
   </div>
 </div>
 <script>
@@ -477,8 +492,9 @@ const COLORS_DARK=[
 function isDark(){return document.body.classList.contains('dark');}
 function getColors(){return isDark()?COLORS_DARK:COLORS;}
 
-// nodes: {id, type:'text'|'image', x, y, colorIdx, isRoot, text}  (text nodes)
+// nodes: {id, type:'text'|'image'|'group', x, y, colorIdx, isRoot, text}  (text nodes)
 //        {id, type:'image', x, y, src, comment}                    (image nodes)
+//        {id, type:'group', x, y, width, height, colorIdx}         (group nodes; groupId on members)
 let nodes=[], edges=[], selected=null;
 let connecting=false, connectFrom=null;       // toolbar connect mode (kept for btn-connect)
 let _dupJumpContent=null, _dupJumpIdx=0;      // Ctrl+Shift+click: cycle through nodes with same content
@@ -516,9 +532,9 @@ function pushHistory(){
 function restoreSnapshot(s){
   _skipHistory=true;
   _suppressSpawnAnim=true;
-  nodesLayer.querySelectorAll('.node-el,.img-node-el').forEach(e=>e.remove());
+  nodesLayer.querySelectorAll('.node-el,.img-node-el,.group-node-el').forEach(e=>e.remove());
   nodes=s.nodes; edges=s.edges; nodeId=s.nodeId;
-  nodes.forEach(n=>{if(n.type==='image')createImgNodeEl(n);else createNodeEl(n);});
+  nodes.forEach(createNodeElByType);
   renderAll();
   _skipHistory=false;
   _suppressSpawnAnim=false;
@@ -538,6 +554,8 @@ function serialize(){
       const comment=(n.comment||'').replace(/\n/g,'\\n');
       const w=n.width||180;
       lines.push(`IMGNODE ${n.id} ${w} ${Math.round(n.x)} ${Math.round(n.y)} ${comment}||${n.src}`);
+    } else if(n.type==='group'){
+      lines.push(`GROUPNODE ${n.id} ${n.colorIdx||0} ${Math.round(n.width||320)} ${Math.round(n.height||220)} ${Math.round(n.x)} ${Math.round(n.y)} ${(n.title||'').replace(/\n/g,'\\n')}`);
     } else {
       const safeText=n.text.replace(/\n/g,'\\n');
       lines.push(`NODE ${n.id} ${n.colorIdx} ${n.isRoot?1:0} ${Math.round(n.x)} ${Math.round(n.y)} ${safeText}`);
@@ -548,6 +566,10 @@ function serialize(){
     if(url||tags.length||status||priv){
       lines.push(`ATTR ${n.id} ${encodeURIComponent(url)}|${encodeURIComponent(tags.join(','))}|${encodeURIComponent(status)}|${priv?1:0}`);
     }
+  });
+  nodes.forEach(n=>{
+    // group membership (text/image nodes only; group nodes can't nest inside another group)
+    if(n.groupId){lines.push(`GROUPMEMBER ${n.id} ${n.groupId}`);}
   });
   nodes.forEach(n=>{
     // showComment defaults to true; only persist when explicitly turned off
@@ -576,6 +598,7 @@ function deserialize(text){
   const ns=[],es=[];let nid=0;
   const attrsMap={};
   const showCommentMap={};
+  const groupMemberMap={};
   for(const line of lines){
     if(line.startsWith('NODE ')){
       const m=line.match(/^NODE (\d+) (\d+) ([01]) (-?\d+) (-?\d+) (.+)$/);
@@ -589,6 +612,12 @@ function deserialize(text){
       const comment=(sep>=0?payload.slice(0,sep):'').replace(/\\n/g,'\n');
       const src=sep>=0?payload.slice(sep+2):'';
       ns.push({id,type:'image',x,y,src,comment,width});
+    } else if(line.startsWith('GROUPNODE ')){
+      const m=line.match(/^GROUPNODE (\d+) (\d+) (\d+) (\d+) (-?\d+) (-?\d+)(?: (.*))?$/);
+      if(m)ns.push({id:+m[1],type:'group',colorIdx:+m[2],width:+m[3],height:+m[4],x:+m[5],y:+m[6],title:(m[7]||'').replace(/\\n/g,'\n')});
+    } else if(line.startsWith('GROUPMEMBER ')){
+      const m=line.match(/^GROUPMEMBER (\d+) (\d+)$/);
+      if(m)groupMemberMap[+m[1]]=+m[2];
     } else if(line.startsWith('ATTR ')){
       const m=line.match(/^ATTR (\d+) (.*)$/);
       if(m){
@@ -634,6 +663,9 @@ function deserialize(text){
     n.tags=a?a.tags:[];
     n.status=a?a.status:'';
     n.private=a?a.private:false;
+    if(n.type!=='group'){
+      n.groupId=groupMemberMap.hasOwnProperty(n.id)?groupMemberMap[n.id]:null;
+    }
     if(n.type==='image'){
       n.showComment=showCommentMap.hasOwnProperty(n.id)?showCommentMap[n.id]:true;
     }
@@ -804,6 +836,128 @@ function renderImgNode(n){
 
 function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
+// ── Group node rendering ───────────────────────────────────
+// Group nodes are text-less rectangular frames. Dragging a text/image node
+// so it lands inside a group's rectangle assigns it to that group (n.groupId);
+// dragging it back out clears the assignment. Dragging the group itself moves
+// every member along with it (see onDragMove/onDragUp).
+const GROUP_MIN_W=140, GROUP_MIN_H=100;
+let resizingGroup=null,resizeCorner=null,resizeStart=null;
+function createGroupNodeEl(n){
+  const el=document.createElement('div');
+  el.className=_suppressSpawnAnim?'group-node-el':'group-node-el spawn-in';el.id='node-'+n.id;
+  nodesLayer.appendChild(el);
+  el.addEventListener('animationend',()=>el.classList.remove('spawn-in'));
+  el.addEventListener('mousedown',e=>{
+    if(e.target.closest('.group-resize-handle'))return; // handled by its own listener
+    onNodeMouseDown(e,n);
+  });
+  el.addEventListener('click',e=>onNodeClick(e,n));
+  el.addEventListener('contextmenu',e=>onGroupNodeRightClick(e,n));
+  el.addEventListener('mouseenter',()=>{hoveredNodeId=n.id;applyHoverHighlight();});
+  el.addEventListener('mouseleave',()=>{hoveredNodeId=null;applyHoverHighlight();});
+}
+function renderGroupNode(n){
+  let el=document.getElementById('node-'+n.id);
+  if(!el){createGroupNodeEl(n);el=document.getElementById('node-'+n.id);}
+  const c=getColors()[n.colorIdx||0];
+  const sx=n.x*scale+panX, sy=n.y*scale+panY;
+  el.style.left=sx+'px';
+  el.style.top=sy+'px';
+  el.style.transform=`translate(-50%,-50%) scale(${scale})`;
+  const visible=isNodeVisible(n.id);
+  el.classList.toggle('hidden',!visible);
+  if(!visible)return;
+  const isPending=ctrlConnectPending===n.id;
+  const isSel=selected===n.id||isPending;
+  const w=n.width||320, h=n.height||220;
+  const lockBadge=n.private?'<div class="private-badge">🔒</div>':'';
+  const labelText=(n.title||'').trim()?escHtml(n.title):'▭';
+  // Resize handles stay a constant on-screen size regardless of canvas zoom
+  // (an inverse scale counteracts the group-node-el's own scale(${scale})),
+  // so they stay easy to grab even when zoomed far out.
+  const invScale=1/scale;
+  const handleStyle=`transform:scale(${invScale})`;
+  const handles=isSel?
+    `<div class="group-resize-handle nw" data-corner="nw" style="${handleStyle}"></div>`+
+    `<div class="group-resize-handle ne" data-corner="ne" style="${handleStyle}"></div>`+
+    `<div class="group-resize-handle sw" data-corner="sw" style="${handleStyle}"></div>`+
+    `<div class="group-resize-handle se" data-corner="se" style="${handleStyle}"></div>`:'';
+  el.innerHTML=`<div class="group-box${isSel?' selected':''}" style="width:${w}px;height:${h}px;background:${c.bg}40;border-color:${isPending?'var(--color-text-info)':c.border}">
+    <div class="group-label" style="color:${c.border};max-width:${w-20}px">${labelText}</div>
+    ${lockBadge}
+    ${handles}
+  </div>`;
+  if(isSel){
+    el.querySelectorAll('.group-resize-handle').forEach(h=>{
+      h.addEventListener('mousedown',e=>onGroupHandleMouseDown(e,n,h.dataset.corner));
+    });
+  }
+}
+function onGroupHandleMouseDown(e,n,corner){
+  e.stopPropagation();e.preventDefault();
+  if(e.button!==0)return;
+  resizingGroup=n;resizeCorner=corner;
+  resizeStart={clientX:e.clientX,clientY:e.clientY,x:n.x,y:n.y,width:n.width||320,height:n.height||220};
+  document.addEventListener('mousemove',onGroupResizeMove);
+  document.addEventListener('mouseup',onGroupResizeUp);
+}
+function onGroupResizeMove(e){
+  if(!resizingGroup)return;
+  const dx=(e.clientX-resizeStart.clientX)/scale;
+  const dy=(e.clientY-resizeStart.clientY)/scale;
+  const signX=(resizeCorner==='se'||resizeCorner==='ne')?1:-1;
+  const signY=(resizeCorner==='se'||resizeCorner==='sw')?1:-1;
+  const newW=Math.max(GROUP_MIN_W,resizeStart.width+signX*dx);
+  const newH=Math.max(GROUP_MIN_H,resizeStart.height+signY*dy);
+  const usedDx=(newW-resizeStart.width)*signX;
+  const usedDy=(newH-resizeStart.height)*signY;
+  resizingGroup.width=newW;
+  resizingGroup.height=newH;
+  resizingGroup.x=resizeStart.x+usedDx/2;
+  resizingGroup.y=resizeStart.y+usedDy/2;
+  renderAll();
+}
+function onGroupResizeUp(){
+  if(resizingGroup){
+    const g=resizingGroup;
+    // Resizing changes which nodes geometrically sit inside the group's
+    // rectangle: newly-covered nodes join, and members that fell outside the
+    // shrunk rectangle are released — mirroring what a drag-in/drag-out does.
+    // Nodes already claimed by a *different* group are left alone so resizing
+    // one group can't silently steal another group's members via overlap.
+    nodes.forEach(m=>{
+      if(m.type==='group'||m.id===g.id)return;
+      if(m.groupId&&m.groupId!==g.id)return;
+      m.groupId=isPointInGroupRect(m.x,m.y,g)?g.id:null;
+    });
+    pushHistory();
+  }
+  resizingGroup=null;resizeCorner=null;
+  document.removeEventListener('mousemove',onGroupResizeMove);
+  document.removeEventListener('mouseup',onGroupResizeUp);
+}
+function isPointInGroupRect(x,y,g){
+  const w=g.width||320,h=g.height||220;
+  const left=g.x-w/2, right=g.x+w/2, top=g.y-h/2, bottom=g.y+h/2;
+  return x>=left&&x<=right&&y>=top&&y<=bottom;
+}
+// Find the group (if any) whose rectangle contains world point (x,y), excluding excludeId.
+function findGroupContaining(x,y,excludeId){
+  let found=null;
+  nodes.forEach(g=>{
+    if(g.type!=='group'||g.id===excludeId)return;
+    if(isPointInGroupRect(x,y,g))found=g;
+  });
+  return found;
+}
+function onGroupNodeRightClick(e,n){
+  e.preventDefault();e.stopPropagation();
+  if((e.ctrlKey||e.metaKey)&&e.shiftKey){openNodeLink(n);return;}
+  if(e.shiftKey){deleteNode(n);return;}
+  openNodeModal(n);
+}
+
 // ── Inline text formatting markup ──────────────────────────
 // \c[color]text\  → colored text
 // \f[size]text\   → sized text (size = number(px) or CSS length like 1.4em)
@@ -880,7 +1034,8 @@ function formatNodeText(raw){
   }).join('');
 }
 
-function renderNode(n){if(n.type==='image')renderImgNode(n);else renderTextNode(n);}
+function renderNode(n){if(n.type==='image')renderImgNode(n);else if(n.type==='group')renderGroupNode(n);else renderTextNode(n);}
+function createNodeElByType(n){if(n.type==='image')createImgNodeEl(n);else if(n.type==='group')createGroupNodeEl(n);else createNodeEl(n);}
 function renderAll(){nodes.forEach(renderNode);renderEdges();applyHoverHighlight();updateZoomDisplay();}
 function updateZoomDisplay(){
   const el=document.getElementById('zoom-level');
@@ -921,47 +1076,145 @@ function edgeLabelPoint(p0x,p0y,p1x,p1y,p2x,p2y,rectA,rectB){
 }
 function renderEdges(){
   svgEl.querySelectorAll('.edge,.edge-label,.edge-hit').forEach(p=>p.remove());
-  // Draws one visible+hit path segment from a fixed start point out to a
-  // real node's center, offsetting the endpoint for arrowhead clearance
-  // (parametric intersection with the node's bounding rect) exactly like
-  // the app has always done for single-arrow edges. Returns the clipped
-  // endpoint and the target's rect (for label placement). Both-end-arrow
-  // edges reuse this twice — once per node, both starting from the shared
-  // midpoint — instead of a special curve formula, so alignment cases
-  // (nodes sharing an x or y) reduce to a straight line automatically,
-  // exactly like every other edge type already does, and no arrowhead ever
-  // needs "start" clearance/orientation handling.
-  function drawSegment(sx,sy,targetNode,hasArrow,dashArr,strokeW,style,e,fixedEnd){
+  // Approximate corner radius per node type, matching each node's own CSS
+  // border-radius — a plain axis-aligned rectangle clip lands outside the
+  // node's true (rounded) silhouette at diagonal angles, near the corners,
+  // which is exactly what left a visible gap there.
+  function nodeCornerRadius(node){
+    if(node.type==='image')return 12;
+    if(node.type==='group')return 14;
+    if(node.isRoot)return 24; // .node-box.root uses a larger border-radius
+    return 20;
+  }
+  function ptInRoundedRect(x,y,rect){
+    const dx=Math.abs(x-rect.cx), dy=Math.abs(y-rect.cy);
+    if(dx>rect.hw||dy>rect.hh)return false;
+    const rad=Math.min(rect.rad||0,rect.hw,rect.hh);
+    const ix=Math.max(0,dx-(rect.hw-rad));
+    const iy=Math.max(0,dy-(rect.hh-rad));
+    return (ix*ix+iy*iy)<=rad*rad+1e-6;
+  }
+  // Finds where the segment from (tx,ty) [the rect's own center, always
+  // inside] toward (fx,fy) [some other point, normally outside] crosses the
+  // rounded-rect boundary — used for both the destination clip (fx,fy = the
+  // source point) and, via clipCurveStart below, reused conceptually for
+  // the bezier case. Clamped so it can never eat more than 80% of the
+  // source-to-target reach.
+  function roundedRectClip(fx,fy,tx,ty,rect){
+    const STEPS=40;
+    let sIn=0,sOut=1,found=false;
+    for(let i=1;i<=STEPS;i++){
+      const s=i/STEPS;
+      const px=tx+(fx-tx)*s, py=ty+(fy-ty)*s;
+      if(!ptInRoundedRect(px,py,rect)){sOut=s;found=true;break;}
+      sIn=s;
+    }
+    if(!found)return {x:fx,y:fy};
+    let lo=sIn,hi=sOut;
+    for(let i=0;i<25;i++){
+      const mid=(lo+hi)/2;
+      const px=tx+(fx-tx)*mid, py=ty+(fy-ty)*mid;
+      if(ptInRoundedRect(px,py,rect))lo=mid;else hi=mid;
+    }
+    const s=Math.min(hi,0.8);
+    return {x:tx+(fx-tx)*s, y:ty+(fy-ty)*s};
+  }
+  function bezierPt(p0,p1,p2,t){
+    const mt=1-t;
+    return {x:mt*mt*p0.x+2*mt*t*p1.x+t*t*p2.x, y:mt*mt*p0.y+2*mt*t*p1.y+t*t*p2.y};
+  }
+  // Trims the START of the classic quadratic curve (p0=raw source center,
+  // p1=classic control point, p2=clipped destination) so the drawn path
+  // never passes through the source's own (rounded) rect — using De
+  // Casteljau subdivision, so the *visible* portion is an exact sub-segment
+  // of the same curve the app has always drawn (same shape, same tangent at
+  // every point), just starting further along it instead of at dead center.
+  // A straight-line "back off toward the boundary" shortcut looks equivalent
+  // for the destination side (where it's been used for arrowheads for a
+  // long time) but visibly kinks the curve when used for the *start*,
+  // because the control point's y depends on the start point — swapping in
+  // a straight-line clipped start moves that y off the node's true center
+  // and bends the curve right at the takeoff, which is what this avoids.
+  function clipCurveStart(p0,p1,p2,rect){
+    if(!rect||!ptInRoundedRect(p0.x,p0.y,rect))return {p0,p1};
+    const STEPS=48;
+    let tIn=0,tOut=1,found=false;
+    for(let i=1;i<=STEPS;i++){
+      const t=i/STEPS;
+      const pt=bezierPt(p0,p1,p2,t);
+      if(!ptInRoundedRect(pt.x,pt.y,rect)){tOut=t;found=true;break;}
+      tIn=t;
+    }
+    if(!found)return {p0:p2,p1:p2};
+    let lo=tIn,hi=tOut;
+    for(let i=0;i<20;i++){
+      const mid=(lo+hi)/2;
+      const pt=bezierPt(p0,p1,p2,mid);
+      if(ptInRoundedRect(pt.x,pt.y,rect))lo=mid;else hi=mid;
+    }
+    const t0=hi;
+    const q0={x:p0.x+(p1.x-p0.x)*t0, y:p0.y+(p1.y-p0.y)*t0};
+    const q1={x:p1.x+(p2.x-p1.x)*t0, y:p1.y+(p2.y-p1.y)*t0};
+    const r ={x:q0.x+(q1.x-q0.x)*t0, y:q0.y+(q1.y-q0.y)*t0};
+    return {p0:r,p1:q1};
+  }
+  // Draws one visible+hit path segment. The end is clipped exactly like the
+  // app has always clipped arrowheads (rect-boundary intersection, now
+  // rounded-corner-aware); the start (when sourceNode is given) is clipped
+  // via curve subdivision above, so both ends stay hidden inside their own
+  // node without altering the curve's shape. Both-end-arrow edges pass a
+  // fixedEnd instead (see below) so two independent clearance calculations
+  // for the same node can't disagree and collapse the segment.
+  function drawSegment(sx,sy,targetNode,hasArrow,dashArr,strokeW,style,e,fixedEnd,sourceNode){
     const tx=targetNode.x*scale+panX, ty=targetNode.y*scale+panY;
     let ex=tx, ey=ty;
     const tEl=document.getElementById('node-'+targetNode.id);
     let rect=null;
     if(tEl){
       const r=tEl.getBoundingClientRect();
-      const hw=r.width/2+4, hh=r.height/2+4; // +4px clearance
-      rect={cx:tx,cy:ty,hw,hh};
+      // Only give an arrowhead room to sit just outside the node (+4px); a
+      // plain line with no marker should stop exactly at the node's edge —
+      // where it always used to disappear behind an opaque node — instead
+      // of leaving a visible gap with nothing (no arrowhead) to justify it.
+      // Even a mathematically exact boundary clip can leave a hair of the
+      // stroke visible, since the line has real width straddling its own
+      // path — nudge the clip in by half the stroke width as a safety
+      // margin so that sliver stays tucked under the node.
+      const pad=hasArrow?4:-strokeW/2;
+      rect={cx:tx,cy:ty,hw:r.width/2+pad,hh:r.height/2+pad,rad:nodeCornerRadius(targetNode)*scale+pad};
       if(fixedEnd){
-        // Both-end-arrow edges pass in the exact clip point already computed
-        // (and made mutually consistent) by bothArrowGeometry, instead of
-        // letting this function derive its own clearance independently —
-        // two separate clearance calculations for the same node could
-        // otherwise disagree slightly and collapse the visible segment.
         ex=fixedEnd.x; ey=fixedEnd.y;
-      } else if(hasArrow){
-        let offset=10;
-        const dx=tx-sx, dy=ty-sy;
-        if(Math.abs(dx)>0.001||Math.abs(dy)>0.001){
-          const txr=hw/Math.abs(dx), tyr=hh/Math.abs(dy);
-          const t=Math.min(txr,tyr);
-          offset=t*Math.sqrt(dx*dx+dy*dy);
-        }
-        offset=Math.min(offset,Math.sqrt((tx-sx)**2+(ty-sy)**2)*0.8);
-        const dist=Math.sqrt(dx*dx+dy*dy)||1;
-        ex=tx-(dx/dist)*offset; ey=ty-(dy/dist)*offset;
+      } else {
+        // Clip at the target's rect boundary regardless of arrow style —
+        // previously this only ran for arrow-ended edges, so a plain or
+        // dashed (no-arrowhead) edge was always drawn all the way to the
+        // target's exact center. That stayed invisible for an opaque node
+        // (hidden underneath it) but showed through a translucent group.
+        const p=roundedRectClip(sx,sy,tx,ty,rect);
+        ex=p.x; ey=p.y;
       }
     }
+    // Build the curve exactly the classic way — control point based on the
+    // raw source center — then trim only the *drawn extent* at the source.
+    let p0={x:sx,y:sy};
     const mx=(sx+ex)/2;
-    const dAttr=`M${sx} ${sy} Q${mx} ${sy} ${ex} ${ey}`;
+    let p1={x:mx,y:sy};
+    const p2={x:ex,y:ey};
+    if(sourceNode){
+      const sEl=document.getElementById('node-'+sourceNode.id);
+      if(sEl){
+        const sr=sEl.getBoundingClientRect();
+        // No padding here: no arrowhead is ever drawn at a source, so the
+        // curve should stop flush with the node's own edge, not short of it.
+        // Same half-stroke-width safety margin as the destination side,
+        // so the source end tucks fully under the node too.
+        const spad=-strokeW/2;
+        const srect={cx:sx,cy:sy,hw:sr.width/2+spad,hh:sr.height/2+spad,rad:nodeCornerRadius(sourceNode)*scale+spad};
+        const clipped=clipCurveStart(p0,p1,p2,srect);
+        p0=clipped.p0; p1=clipped.p1;
+      }
+    }
+    const dAttr=`M${p0.x} ${p0.y} Q${p1.x} ${p1.y} ${p2.x} ${p2.y}`;
     const path=document.createElementNS('http://www.w3.org/2000/svg','path');
     path.setAttribute('d',dAttr);
     path.setAttribute('fill','none');
@@ -991,6 +1244,9 @@ function renderEdges(){
     hit.dataset.to=String(e.to);
     hit.addEventListener('contextmenu',evt=>onEdgeRightClick(evt,e));
     svgEl.appendChild(hit);
+    // mx is the *classic* (raw-center-based) midpoint, not the post-trim
+    // control point, so label placement keeps working the way it always has
+    // regardless of how much of the curve got trimmed away.
     return {ex,ey,rect,mx};
   }
   // Balanced meeting point between two nodes for both-end-arrow edges, plus
@@ -1071,13 +1327,13 @@ function renderEdges(){
       return;
     }
     const hasArrowEnd=(style==='arrow'||style==='dashed-arrow');
-    const seg=drawSegment(ax,ay,b,hasArrowEnd,dashArr,strokeW,style,e);
     let aRect=null;
     const aEl=document.getElementById('node-'+a.id);
     if(aEl){
       const r=aEl.getBoundingClientRect();
       aRect={cx:ax,cy:ay,hw:r.width/2+4,hh:r.height/2+4};
     }
+    const seg=drawSegment(ax,ay,b,hasArrowEnd,dashArr,strokeW,style,e,undefined,a);
     if(e.label){
       const [lx,ly]=edgeLabelPoint(ax,ay,seg.mx,ay,seg.ex,seg.ey,aRect,seg.rect);
       appendLabel(lx,ly,e);
@@ -1108,7 +1364,7 @@ function applyHoverHighlight(){
   const applyClass=(nodeId, cls)=>{
     const el=document.getElementById('node-'+nodeId);
     if(!el)return;
-    const box=el.querySelector('.node-box,.img-node-wrap');
+    const box=el.querySelector('.node-box,.img-node-wrap,.group-box');
     if(box)box.classList.add(cls);
   };
   applyClass(hoveredNodeId,'hover-self');
@@ -1130,12 +1386,16 @@ function applyHoverHighlight(){
 }
 
 function makeTextNode(text,x,y,colorIdx=0,isRoot=false){
-  const n={id:nodeId++,type:'text',text,x,y,colorIdx,isRoot,url:'',tags:[],status:'',private:false};
+  const n={id:nodeId++,type:'text',text,x,y,colorIdx,isRoot,groupId:null,url:'',tags:[],status:'',private:false};
   nodes.push(n);createNodeEl(n);renderNode(n);renderEdges();return n;
 }
 function makeImgNode(src,x,y,comment='',width=0){
-  const n={id:nodeId++,type:'image',src,x,y,comment,width,showComment:true,naturalW:0,naturalH:0,url:'',tags:[],status:'',private:false};
+  const n={id:nodeId++,type:'image',src,x,y,comment,width,showComment:true,naturalW:0,naturalH:0,groupId:null,url:'',tags:[],status:'',private:false};
   nodes.push(n);createImgNodeEl(n);renderNode(n);renderEdges();return n;
+}
+function makeGroupNode(x,y,width=320,height=220,colorIdx=5){
+  const n={id:nodeId++,type:'group',x,y,width,height,colorIdx,title:'',url:'',tags:[],status:'',private:false};
+  nodes.push(n);createGroupNodeEl(n);renderNode(n);renderEdges();return n;
 }
 // ── Tag parsing helpers ────────────────────────────────────
 // "#タグA#タグB#タグC" -> ['タグA','タグB','タグC']
@@ -1216,9 +1476,34 @@ function onDragMove(e){
   const dx=nx-dragNode.x, dy=ny-dragNode.y;
   dragNode.x=nx;dragNode.y=ny;
   if(ctrlDragging){dragDescendants.forEach(d=>{d.x+=dx;d.y+=dy;});}
+  // Dragging a group node carries all of its member nodes (n.groupId===dragNode.id)
+  // along with it, regardless of the tree-edge-based ctrlDragging above.
+  if(dragNode.type==='group'){
+    nodes.forEach(m=>{if(m.groupId===dragNode.id){m.x+=dx;m.y+=dy;}});
+  }
   renderAll();
 }
-function onDragUp(){if(dragNode&&didDrag)pushHistory();dragNode=null;dragDescendants=[];document.removeEventListener('mousemove',onDragMove);document.removeEventListener('mouseup',onDragUp);}
+function onDragUp(){
+  if(dragNode&&didDrag){
+    if(dragNode.type!=='group'){
+      // Dropping a text/image node: join the group whose rectangle it now sits
+      // inside, or leave its current group if it was dragged back out of it.
+      const g=findGroupContaining(dragNode.x,dragNode.y,dragNode.id);
+      dragNode.groupId=g?g.id:null;
+    }
+    // Ctrl-dragged descendants moved along with dragNode re-evaluate their
+    // own group membership too, exactly like dragNode does, so a whole
+    // subtree dragged into (or out of) a group registers every member.
+    dragDescendants.forEach(d=>{
+      if(d.type==='group')return;
+      const g=findGroupContaining(d.x,d.y,d.id);
+      d.groupId=g?g.id:null;
+    });
+    pushHistory();
+  }
+  dragNode=null;dragDescendants=[];
+  document.removeEventListener('mousemove',onDragMove);document.removeEventListener('mouseup',onDragUp);
+}
 
 let lastPlainClick={id:null,time:0};
 function onNodeClick(e,n){
@@ -1244,7 +1529,7 @@ function onNodeClick(e,n){
     jumpToDuplicateNode(n);
     return;
   }
-  if(e.shiftKey&&n.type==='text'){
+  if(e.shiftKey&&(n.type==='text'||n.type==='group')){
     lastPlainClick={id:null,time:0};
     n.colorIdx=(((n.colorIdx||0)+1)%COLORS.length);
     selected=n.id;pushHistory();renderAll();
@@ -1271,6 +1556,8 @@ function onNodeClick(e,n){
   }
 }
 function deleteNode(n){
+  // Deleting a group ungroups its members rather than deleting them too.
+  if(n.type==='group'){nodes.forEach(m=>{if(m.groupId===n.id)m.groupId=null;});}
   nodes=nodes.filter(nd=>nd.id!==n.id);
   edges=edges.filter(ed=>ed.from!==n.id&&ed.to!==n.id);
   collapsedNodes.delete(n.id);
@@ -1296,6 +1583,9 @@ function deleteNodeWithDescendants(n){
   const descendantIds=getAllDescendantIds(n.id);
   const idsToDelete=new Set(descendantIds);
   idsToDelete.add(n.id);
+  // Any group among the nodes being deleted ungroups its members, unless
+  // those members are themselves being deleted in the same operation.
+  nodes.forEach(m=>{if(m.groupId&&idsToDelete.has(m.groupId)&&!idsToDelete.has(m.id))m.groupId=null;});
   nodes=nodes.filter(nd=>!idsToDelete.has(nd.id));
   edges=edges.filter(ed=>!idsToDelete.has(ed.from)&&!idsToDelete.has(ed.to));
   idsToDelete.forEach(id=>{
@@ -1567,6 +1857,8 @@ const nodeModalTextLabel=document.getElementById('node-modal-text-label');
 const nodeModalText=document.getElementById('node-modal-text');
 const nodeModalCommentToggleRow=document.getElementById('node-modal-comment-toggle-row');
 const nodeModalShowComment=document.getElementById('node-modal-show-comment');
+const nodeModalGroupTitleLabel=document.getElementById('node-modal-group-title-label');
+const nodeModalGroupTitle=document.getElementById('node-modal-group-title');
 const nodeModalUrl=document.getElementById('node-modal-url');
 const nodeModalTags=document.getElementById('node-modal-tags');
 const nodeModalStatus=document.getElementById('node-modal-status');
@@ -1575,7 +1867,8 @@ function openNodeModal(n){
   editingNode=n;
   selected=n.id;renderAll();
   const isImg=n.type==='image';
-  nodeModalTitle.textContent=isImg?'画像ノードの編集':'ノードの属性編集';
+  const isGroup=n.type==='group';
+  nodeModalTitle.textContent=isImg?'画像ノードの編集':(isGroup?'グループノードの属性編集':'ノードの属性編集');
   // 画像ノード：左＝画像/サイズ/コメント、右＝URL/タグ/ステータス の2カラム表示。
   // テキストノード：本文はインライン編集のため、属性のみの1カラム表示。
   nodeModalBox.style.width=isImg?'920px':'460px';
@@ -1586,6 +1879,8 @@ function openNodeModal(n){
   nodeModalSizeRow.style.display=isImg?'flex':'none';
   nodeModalCommentToggleRow.style.display=isImg?'flex':'none';
   nodeModalText.style.display=isImg?'block':'none';
+  nodeModalGroupTitleLabel.style.display=isGroup?'flex':'none';
+  nodeModalGroupTitle.style.display=isGroup?'block':'none';
   if(isImg){
     nodeModalText.placeholder='この画像へのコメントを入力...';
     nodeModalPreview.src=n.src;
@@ -1595,13 +1890,16 @@ function openNodeModal(n){
     nodeModalText.value=n.comment||'';
     nodeModalShowComment.checked=n.showComment!==false;
   }
+  if(isGroup){
+    nodeModalGroupTitle.value=n.title||'';
+  }
   nodeModalUrl.value=n.url||'';
   nodeModalTags.value=tagsToInputString(n.tags);
   nodeModalStatus.value=n.status||'';
   nodeModalPrivate.checked=n.private===true;
   nodeModal.classList.remove('closing');
   nodeModal.classList.add('show');
-  (isImg?nodeModalText:nodeModalUrl).focus();
+  (isImg?nodeModalText:isGroup?nodeModalGroupTitle:nodeModalUrl).focus();
 }
 // live preview of image size slider
 nodeModalWidth.addEventListener('input',function(){
@@ -1628,6 +1926,9 @@ function saveNodeModal(){
     n.comment=nodeModalText.value;
     n.width=+nodeModalWidth.value;
     n.showComment=nodeModalShowComment.checked;
+  }
+  if(n.type==='group'){
+    n.title=nodeModalGroupTitle.value.trim();
   }
   // テキストノードの本文はこのモーダルでは編集しない（インライン編集で対応）
   n.url=nodeModalUrl.value.trim();
@@ -1706,7 +2007,18 @@ edgeModal.addEventListener('keydown',e=>{
 canvas.addEventListener('mousedown',e=>{
   if(e.button!==0)return;
   if(isAnyModalOpen())return;
-  if((e.ctrlKey||e.metaKey)&&!e.target.closest('.node-el')&&!e.target.closest('.img-node-el')&&!e.target.closest('.modal-box')){
+  const onEmptyCanvas=!e.target.closest('.node-el')&&!e.target.closest('.img-node-el')&&!e.target.closest('.group-node-el')&&!e.target.closest('.modal-box');
+  if((e.ctrlKey||e.metaKey)&&e.shiftKey&&onEmptyCanvas){
+    // Ctrl(+Cmd)+Shift+click on empty canvas: add a group node here
+    e.preventDefault();
+    const rect=canvas.getBoundingClientRect();
+    const wx=(e.clientX-rect.left-panX)/scale;
+    const wy=(e.clientY-rect.top-panY)/scale;
+    const n=makeGroupNode(wx,wy);
+    selected=n.id;pushHistory();renderAll();
+    return;
+  }
+  if((e.ctrlKey||e.metaKey)&&onEmptyCanvas){
     e.preventDefault();
     const rect=canvas.getBoundingClientRect();
     const wx=(e.clientX-rect.left-panX)/scale;
@@ -1717,7 +2029,7 @@ canvas.addEventListener('mousedown',e=>{
     setTimeout(()=>startInlineEdit(n),0);
     return;
   }
-  if(!connecting&&!e.target.closest('.node-el')&&!e.target.closest('.img-node-el')&&!e.target.closest('.modal-box')){
+  if(!connecting&&onEmptyCanvas){
     selected=null;isPanning=true;canvas.classList.add('grabbing');
     panStart={x:e.clientX-panX,y:e.clientY-panY};renderAll();
   }
@@ -2024,6 +2336,12 @@ document.getElementById('btn-connect').addEventListener('click',()=>{
 });
 // file picker button
 document.getElementById('btn-add-img').addEventListener('click',()=>document.getElementById('file-input').click());
+document.getElementById('btn-add-group').addEventListener('click',()=>{
+  const rect=canvas.getBoundingClientRect();
+  const x=(rect.width/2-panX)/scale,y=(rect.height/2-panY)/scale;
+  const n=makeGroupNode(x,y);
+  selected=n.id;pushHistory();renderAll();
+});
 document.getElementById('file-input').addEventListener('change',e=>{
   const files=[...e.target.files].filter(f=>f.type.startsWith('image/'));
   const rect=canvas.getBoundingClientRect();
@@ -2041,6 +2359,8 @@ document.getElementById('file-input').addEventListener('change',e=>{
 
 document.getElementById('btn-delete').addEventListener('click',()=>{
   if(selected===null)return;
+  const selNode=nodes.find(n=>n.id===selected);
+  if(selNode&&selNode.type==='group'){nodes.forEach(m=>{if(m.groupId===selected)m.groupId=null;});}
   nodes=nodes.filter(n=>n.id!==selected);
   edges=edges.filter(e=>e.from!==selected&&e.to!==selected);
   collapsedNodes.delete(selected);
@@ -2051,7 +2371,7 @@ COLORS.forEach((_,i)=>{
   document.getElementById('btn-c'+i).addEventListener('click',()=>{
     if(selected===null)return;
     const n=nodes.find(nd=>nd.id===selected);
-    if(n&&n.type==='text'){n.colorIdx=i;pushHistory();renderAll();}
+    if(n&&(n.type==='text'||n.type==='group')){n.colorIdx=i;pushHistory();renderAll();}
   });
 });
 
@@ -2437,9 +2757,25 @@ document.addEventListener('keydown',e=>{
         if(ed.style)ne.style=ed.style;
         return ne;
       });
+      // Group membership only survives the copy if the group node itself was
+      // part of the copied subtree (i.e. also remapped via idMap); otherwise
+      // drop it rather than leaving the pasted copy pointing at a distant
+      // group it was never dragged into.
+      newNodes.forEach(n=>{
+        if(n.groupId)n.groupId=idMap.has(n.groupId)?idMap.get(n.groupId):null;
+      });
+      // If a pasted node (still ungrouped after the remap above) lands inside
+      // an existing group's rectangle, join that group — same rule as a
+      // manual drag-and-drop.
+      newNodes.forEach(n=>{
+        if(n.type!=='group'&&!n.groupId){
+          const g=findGroupContaining(n.x,n.y,n.id);
+          if(g)n.groupId=g.id;
+        }
+      });
       newNodes.forEach(n=>{
         nodes.push(n);
-        if(n.type==='image')createImgNodeEl(n);else createNodeEl(n);
+        createNodeElByType(n);
       });
       edges.push(...newEdges);
       selected=idMap.get(copiedTree.rootId);
@@ -2450,10 +2786,16 @@ document.addEventListener('keydown',e=>{
       const n=JSON.parse(JSON.stringify(copiedNode));
       n.id=nodeId++;
       n.isRoot=false;
+      n.groupId=null; // single-node paste starts ungrouped, unless...
       n.x=lastMousePos.x+20;
       n.y=lastMousePos.y+20;
+      if(n.type!=='group'){
+        // ...it happens to land inside an existing group's rectangle.
+        const g=findGroupContaining(n.x,n.y,n.id);
+        if(g)n.groupId=g.id;
+      }
       nodes.push(n);
-      if(n.type==='image')createImgNodeEl(n);else createNodeEl(n);
+      createNodeElByType(n);
       selected=n.id;
       pushHistory();renderAll();
       showToast('✓ ノードを貼り付けました');
@@ -2493,7 +2835,7 @@ function applySearchHighlight(){
   searchResults.forEach((id,i)=>{
     const el=document.getElementById('node-'+id);
     if(!el)return;
-    const box=el.querySelector('.node-box,.img-node-wrap');
+    const box=el.querySelector('.node-box,.img-node-wrap,.group-box');
     if(!box)return;
     box.classList.add(i===searchIdx?'search-current':'search-hit');
   });
@@ -2763,7 +3105,7 @@ function loadMap(data, mode, successMsg){
   result.edges=result.edges.filter(e=>validIds.has(e.from)&&validIds.has(e.to));
 
   if(mode==='overwrite'){
-    nodesLayer.querySelectorAll('.node-el,.img-node-el').forEach(e=>e.remove());
+    nodesLayer.querySelectorAll('.node-el,.img-node-el,.group-node-el').forEach(e=>e.remove());
     nodes=result.nodes;edges=result.edges;nodeId=result.nodeId;
     collapsedNodes=new Set(collapsed);
     if(loadedTitle){document.getElementById('map-title-text').textContent=loadedTitle;document.title=loadedTitle;}
@@ -2777,7 +3119,7 @@ function loadMap(data, mode, successMsg){
   } else {
     // append: remap ids to avoid collisions
     const idOffset=nodeId;
-    result.nodes.forEach(n=>{n.id+=idOffset;});
+    result.nodes.forEach(n=>{n.id+=idOffset;if(n.groupId)n.groupId+=idOffset;});
     result.edges.forEach(e=>{e.from+=idOffset;e.to+=idOffset;});
     collapsed.forEach(id=>collapsedNodes.add(id+idOffset));
     nodes=nodes.concat(result.nodes);
@@ -2785,7 +3127,7 @@ function loadMap(data, mode, successMsg){
     nodeId=Math.max(nodeId,result.nodeId+idOffset);
     selected=null;
   }
-  result.nodes.forEach(n=>{if(n.type==='image')createImgNodeEl(n);else createNodeEl(n);});
+  result.nodes.forEach(createNodeElByType);
   renderAll();pushHistory();
   if(mode==='overwrite'&&nodes.length>0){
     const youngest=nodes.reduce((min,n)=>n.id<min.id?n:min,nodes[0]);
@@ -2826,6 +3168,12 @@ function generatePublicHtml(){
       excludedIds.add(n.id);
       getAllDescendantIds(n.id).forEach(id=>excludedIds.add(id));
     }
+  });
+  // A private group's members (linked via groupId, not tree edges) must be
+  // excluded too, or their content would still leak into the public export
+  // even though the group frame around them is hidden.
+  nodes.forEach(n=>{
+    if(n.groupId&&excludedIds.has(n.groupId))excludedIds.add(n.id);
   });
   const origNodes=nodes, origEdges=edges, origCollapsed=collapsedNodes;
   let mapData;
@@ -2873,6 +3221,7 @@ function deserialize(text){
   const ns=[],es=[];let nid=0;
   const attrsMap={};
   const showCommentMap={};
+  const groupMemberMap={};
   for(const line of lines){
     if(line.startsWith('NODE ')){
       const m=line.match(/^NODE (\\d+) (\\d+) ([01]) (-?\\d+) (-?\\d+) (.+)$/);
@@ -2884,6 +3233,12 @@ function deserialize(text){
       const comment=(sep>=0?payload.slice(0,sep):'').replace(/\\\\n/g,'\\n');
       const src=sep>=0?payload.slice(sep+2):'';
       ns.push({id,type:'image',x,y,src,comment,width,naturalW:0,naturalH:0});
+    } else if(line.startsWith('GROUPNODE ')){
+      const m=line.match(/^GROUPNODE (\\d+) (\\d+) (\\d+) (\\d+) (-?\\d+) (-?\\d+)(?: (.*))?$/);
+      if(m)ns.push({id:+m[1],type:'group',colorIdx:+m[2],width:+m[3],height:+m[4],x:+m[5],y:+m[6],title:(m[7]||'').replace(/\\\\n/g,'\\n')});
+    } else if(line.startsWith('GROUPMEMBER ')){
+      const m=line.match(/^GROUPMEMBER (\\d+) (\\d+)$/);
+      if(m)groupMemberMap[+m[1]]=+m[2];
     } else if(line.startsWith('ATTR ')){
       const m=line.match(/^ATTR (\\d+) (.*)$/);
       if(m){
@@ -2925,6 +3280,9 @@ function deserialize(text){
     n.url=a?a.url:'';
     n.tags=a?a.tags:[];
     n.status=a?a.status:'';
+    if(n.type!=='group'){
+      n.groupId=groupMemberMap.hasOwnProperty(n.id)?groupMemberMap[n.id]:null;
+    }
     if(n.type==='image'){
       n.showComment=showCommentMap.hasOwnProperty(n.id)?showCommentMap[n.id]:true;
     }
@@ -2992,7 +3350,7 @@ function applyHoverHighlight(){
   const childIds=new Set(edges.filter(e=>e.from===hoveredNodeId).map(e=>e.to));
   const applyClass=(nodeId, cls)=>{
     const el=document.getElementById('node-'+nodeId);if(!el)return;
-    const box=el.querySelector('.node-box,.img-node-wrap');if(box)box.classList.add(cls);
+    const box=el.querySelector('.node-box,.img-node-wrap,.group-box');if(box)box.classList.add(cls);
   };
   applyClass(hoveredNodeId,'hover-self');
   parentIds.forEach(id=>applyClass(id,'hover-parent'));
@@ -3048,7 +3406,7 @@ function renderAll(){
     if(!el){
       el=document.createElement('div');
       el.id='node-'+n.id;
-      el.className=(n.type==='image'?'img-node-el':'node-el')+' spawn-in';
+      el.className=(n.type==='image'?'img-node-el':n.type==='group'?'group-node-el':'node-el')+' spawn-in';
       nodesLayer.appendChild(el);
       el.addEventListener('animationend',()=>el.classList.remove('spawn-in'));
       if(n.type==='text'){
@@ -3093,6 +3451,11 @@ function renderAll(){
       const multi=n.text.includes('\\n');
       const ws=multi?'white-space:pre;text-align:left':'white-space:nowrap;text-align:center';
       el.innerHTML='<div class="node-box'+(n.isRoot?' root':'')+(hc?' has-children':'')+(isColl?' collapsed':'')+'" style="background:'+c.bg+';border-color:'+c.border+';color:'+c.text+';'+ws+'">'+formatNodeText(n.text)+'</div>';
+    } else if(n.type==='group'){
+      const c=getColors()[n.colorIdx||0];
+      const gw=n.width||320, gh=n.height||220;
+      const labelText=(n.title||'').trim()?escHtml(n.title):'▭';
+      el.innerHTML='<div class="group-box" style="width:'+gw+'px;height:'+gh+'px;background:'+c.bg+'40;border-color:'+c.border+'"><div class="group-label" style="color:'+c.border+';max-width:'+(gw-20)+'px">'+labelText+'</div></div>';
     } else {
       const w=n.width||180;
       const showComment=n.showComment!==false;
@@ -3149,33 +3512,104 @@ function edgeLabelPoint(p0x,p0y,p1x,p1y,p2x,p2y,rectA,rectB){
 }
 function renderEdges(){
   svgEl.querySelectorAll('.edge,.edge-label').forEach(p=>p.remove());
-  function drawSegment(sx,sy,targetNode,hasArrow,dashArr,strokeW,style,e,fixedEnd){
+  function nodeCornerRadius(node){
+    if(node.type==='image')return 12;
+    if(node.type==='group')return 14;
+    if(node.isRoot)return 24; // .node-box.root uses a larger border-radius
+    return 20;
+  }
+  function ptInRoundedRect(x,y,rect){
+    const dx=Math.abs(x-rect.cx), dy=Math.abs(y-rect.cy);
+    if(dx>rect.hw||dy>rect.hh)return false;
+    const rad=Math.min(rect.rad||0,rect.hw,rect.hh);
+    const ix=Math.max(0,dx-(rect.hw-rad));
+    const iy=Math.max(0,dy-(rect.hh-rad));
+    return (ix*ix+iy*iy)<=rad*rad+1e-6;
+  }
+  function roundedRectClip(fx,fy,tx,ty,rect){
+    const STEPS=40;
+    let sIn=0,sOut=1,found=false;
+    for(let i=1;i<=STEPS;i++){
+      const s=i/STEPS;
+      const px=tx+(fx-tx)*s, py=ty+(fy-ty)*s;
+      if(!ptInRoundedRect(px,py,rect)){sOut=s;found=true;break;}
+      sIn=s;
+    }
+    if(!found)return {x:fx,y:fy};
+    let lo=sIn,hi=sOut;
+    for(let i=0;i<25;i++){
+      const mid=(lo+hi)/2;
+      const px=tx+(fx-tx)*mid, py=ty+(fy-ty)*mid;
+      if(ptInRoundedRect(px,py,rect))lo=mid;else hi=mid;
+    }
+    const s=Math.min(hi,0.8);
+    return {x:tx+(fx-tx)*s, y:ty+(fy-ty)*s};
+  }
+  function bezierPt(p0,p1,p2,t){
+    const mt=1-t;
+    return {x:mt*mt*p0.x+2*mt*t*p1.x+t*t*p2.x, y:mt*mt*p0.y+2*mt*t*p1.y+t*t*p2.y};
+  }
+  function clipCurveStart(p0,p1,p2,rect){
+    if(!rect||!ptInRoundedRect(p0.x,p0.y,rect))return {p0:p0,p1:p1};
+    const STEPS=48;
+    let tIn=0,tOut=1,found=false;
+    for(let i=1;i<=STEPS;i++){
+      const t=i/STEPS;
+      const pt=bezierPt(p0,p1,p2,t);
+      if(!ptInRoundedRect(pt.x,pt.y,rect)){tOut=t;found=true;break;}
+      tIn=t;
+    }
+    if(!found)return {p0:p2,p1:p2};
+    let lo=tIn,hi=tOut;
+    for(let i=0;i<20;i++){
+      const mid=(lo+hi)/2;
+      const pt=bezierPt(p0,p1,p2,mid);
+      if(ptInRoundedRect(pt.x,pt.y,rect))lo=mid;else hi=mid;
+    }
+    const t0=hi;
+    const q0={x:p0.x+(p1.x-p0.x)*t0, y:p0.y+(p1.y-p0.y)*t0};
+    const q1={x:p1.x+(p2.x-p1.x)*t0, y:p1.y+(p2.y-p1.y)*t0};
+    const r ={x:q0.x+(q1.x-q0.x)*t0, y:q0.y+(q1.y-q0.y)*t0};
+    return {p0:r,p1:q1};
+  }
+  function drawSegment(sx,sy,targetNode,hasArrow,dashArr,strokeW,style,e,fixedEnd,sourceNode){
     const tx=targetNode.x*scale+panX, ty=targetNode.y*scale+panY;
     let ex=tx,ey=ty;
     const tEl=document.getElementById('node-'+targetNode.id);
     let rect=null;
     if(tEl){
       const r=tEl.getBoundingClientRect();
-      const hw=r.width/2+4,hh=r.height/2+4;
-      rect={cx:tx,cy:ty,hw:hw,hh:hh};
+      // Even a mathematically exact boundary clip can leave a hair of the
+      // stroke visible, since the line has real width straddling its own
+      // path — nudge the clip in by half the stroke width as a safety
+      // margin so that sliver stays tucked under the node.
+      const pad=hasArrow?4:-strokeW/2;
+      rect={cx:tx,cy:ty,hw:r.width/2+pad,hh:r.height/2+pad,rad:nodeCornerRadius(targetNode)*scale+pad};
       if(fixedEnd){
         ex=fixedEnd.x; ey=fixedEnd.y;
-      } else if(hasArrow){
-        let offset=10;
-        const dx=tx-sx,dy=ty-sy;
-        if(Math.abs(dx)>0.001||Math.abs(dy)>0.001){
-          const txr=hw/Math.abs(dx),tyr=hh/Math.abs(dy);
-          const t=Math.min(txr,tyr);
-          offset=t*Math.sqrt(dx*dx+dy*dy);
-        }
-        offset=Math.min(offset,Math.sqrt((tx-sx)**2+(ty-sy)**2)*0.8);
-        const dist=Math.sqrt(dx*dx+dy*dy)||1;
-        ex=tx-(dx/dist)*offset;ey=ty-(dy/dist)*offset;
+      } else {
+        const p=roundedRectClip(sx,sy,tx,ty,rect);
+        ex=p.x; ey=p.y;
       }
     }
+    let p0={x:sx,y:sy};
     const mx=(sx+ex)/2;
+    let p1={x:mx,y:sy};
+    const p2={x:ex,y:ey};
+    if(sourceNode){
+      const sEl=document.getElementById('node-'+sourceNode.id);
+      if(sEl){
+        const sr=sEl.getBoundingClientRect();
+        // Same half-stroke-width safety margin as the destination side,
+        // so the source end tucks fully under the node too.
+        const spad=-strokeW/2;
+        const srect={cx:sx,cy:sy,hw:sr.width/2+spad,hh:sr.height/2+spad,rad:nodeCornerRadius(sourceNode)*scale+spad};
+        const clipped=clipCurveStart(p0,p1,p2,srect);
+        p0=clipped.p0; p1=clipped.p1;
+      }
+    }
     const path=document.createElementNS('http://www.w3.org/2000/svg','path');
-    path.setAttribute('d','M'+sx+' '+sy+' Q'+mx+' '+sy+' '+ex+' '+ey);
+    path.setAttribute('d','M'+p0.x+' '+p0.y+' Q'+p1.x+' '+p1.y+' '+p2.x+' '+p2.y);
     path.setAttribute('fill','none');path.setAttribute('stroke','var(--color-edge)');
     path.setAttribute('stroke-width',String(strokeW));path.setAttribute('class','edge');
     if(dashArr)path.setAttribute('stroke-dasharray',dashArr);
@@ -3245,13 +3679,13 @@ function renderEdges(){
       return;
     }
     const hasArrowEnd=(style==='arrow'||style==='dashed-arrow');
-    const seg=drawSegment(ax,ay,b,hasArrowEnd,dashArr,strokeW,style,e);
     let aRect=null;
     const aEl=document.getElementById('node-'+a.id);
     if(aEl){
       const r=aEl.getBoundingClientRect();
       aRect={cx:ax,cy:ay,hw:r.width/2+4,hh:r.height/2+4};
     }
+    const seg=drawSegment(ax,ay,b,hasArrowEnd,dashArr,strokeW,style,e,undefined,a);
     if(e.label){
       const mp=edgeLabelPoint(ax,ay,seg.mx,ay,seg.ex,seg.ey,aRect,seg.rect);
       appendLabel(mp[0],mp[1],e);
@@ -3410,7 +3844,7 @@ function applySHL(){
   if(!q||!sResults.length)return;
   sResults.forEach((id,i)=>{
     const el=document.getElementById('node-'+id);if(!el)return;
-    const box=el.querySelector('.node-box,.img-node-wrap');if(!box)return;
+    const box=el.querySelector('.node-box,.img-node-wrap,.group-box');if(!box)return;
     box.classList.add(i===sIdx?'search-current':'search-hit');
   });
 }
@@ -3618,15 +4052,19 @@ html,body{height:100%;background:var(--color-background-secondary);color:var(--c
 .node-box.has-children{cursor:pointer}
 .node-box.has-children::after{content:'▶';font-size:9px;margin-left:6px;opacity:.5}
 .node-box.has-children.collapsed::after{content:'▶▶'}
-.node-el.hidden,.img-node-el.hidden{display:none!important}
+.node-el.hidden,.img-node-el.hidden,.group-node-el.hidden{display:none!important}
+.group-node-el{position:absolute;transform:translate(-50%,-50%);z-index:1}
+.group-node-el.spawn-in{animation:nodeSpawn .45s var(--ease-bounce) both}
+.group-box{position:relative;box-sizing:border-box;border-radius:14px;border:2.5px dashed}
+.group-label{position:absolute;top:-11px;left:14px;font-size:13px;font-weight:600;line-height:1.4;background:var(--color-background-primary);padding:0 5px;pointer-events:none;opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:4px}
 .img-node-wrap{border-radius:12px;border:1.5px solid var(--color-border-secondary);background:var(--color-background-primary);display:inline-block;overflow:visible;transition:outline .18s var(--ease-out),transform .18s var(--ease-out)}
 .img-node-wrap img{display:block;border-radius:12px 12px 0 0}
 .img-node-caption{padding:6px 10px;font-size:11px;color:var(--color-text-secondary);border-top:0.5px solid var(--color-border-tertiary);border-radius:0 0 12px 12px;background:var(--color-background-primary);word-break:break-all;white-space:pre-wrap;border:1.5px solid var(--color-border-secondary);border-top:none}
 .search-hit{outline:2.5px solid #f5a623!important;outline-offset:3px}
 .search-current{outline:3px solid #e8430a!important;outline-offset:3px}
-.node-box.hover-self,.img-node-wrap.hover-self{outline:2.5px solid #f5a100;outline-offset:3px;box-shadow:0 0 0 4px rgba(245,161,0,.15);transform:scale(1.045)}
-.node-box.hover-parent,.img-node-wrap.hover-parent{outline:2.5px solid #2196f3;outline-offset:3px;box-shadow:0 0 0 4px rgba(33,150,243,.15);transform:scale(1.02)}
-.node-box.hover-child,.img-node-wrap.hover-child{outline:2.5px solid #4caf50;outline-offset:3px;box-shadow:0 0 0 4px rgba(76,175,80,.15);transform:scale(1.02)}
+.node-box.hover-self,.img-node-wrap.hover-self,.group-box.hover-self{outline:2.5px solid #f5a100;outline-offset:3px;box-shadow:0 0 0 4px rgba(245,161,0,.15);transform:scale(1.045)}
+.node-box.hover-parent,.img-node-wrap.hover-parent,.group-box.hover-parent{outline:2.5px solid #2196f3;outline-offset:3px;box-shadow:0 0 0 4px rgba(33,150,243,.15);transform:scale(1.02)}
+.node-box.hover-child,.img-node-wrap.hover-child,.group-box.hover-child{outline:2.5px solid #4caf50;outline-offset:3px;box-shadow:0 0 0 4px rgba(76,175,80,.15);transform:scale(1.02)}
   .edge.hover-edge{stroke:#f5a100!important;opacity:1!important;}
 #toolbar{display:flex;align-items:center;gap:6px;padding:8px 12px;background:var(--color-background-primary);border-top:0.5px solid var(--color-border-tertiary);user-select:none}
 button{font-family:var(--font-sans);font-size:12px;padding:5px 10px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-primary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:4px;transition:background .12s,transform .15s var(--ease-out),box-shadow .15s var(--ease-out)}
