@@ -246,7 +246,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.26</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.27</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -1500,7 +1500,23 @@ function onDragMove(e){
   const nx=e.clientX/scale-dragOffset.x, ny=e.clientY/scale-dragOffset.y;
   const dx=nx-dragNode.x, dy=ny-dragNode.y;
   dragNode.x=nx;dragNode.y=ny;
-  if(ctrlDragging){dragDescendants.forEach(d=>{d.x+=dx;d.y+=dy;});}
+  if(ctrlDragging){
+    // A descendant that's itself a group carries its own members along too,
+    // exactly like directly dragging that group would — otherwise a group
+    // sitting further down the tree gets moved while its members are left
+    // behind. Skip any member that's *also* an independent tree-descendant
+    // here (it's already being moved by the loop itself) so it isn't
+    // shifted twice.
+    const descIdSet=new Set(dragDescendants.map(d=>d.id));
+    dragDescendants.forEach(d=>{
+      d.x+=dx;d.y+=dy;
+      if(d.type==='group'){
+        nodes.forEach(m=>{
+          if(m.groupId===d.id&&!descIdSet.has(m.id)){m.x+=dx;m.y+=dy;}
+        });
+      }
+    });
+  }
   // Dragging a group node carries all of its member nodes (n.groupId===dragNode.id)
   // along with it, regardless of the tree-edge-based ctrlDragging above.
   if(dragNode.type==='group'){
@@ -1523,9 +1539,11 @@ function onDragUp(){
     }
     // Ctrl-dragged descendants moved along with dragNode re-evaluate their
     // own group membership too, exactly like dragNode does, so a whole
-    // subtree dragged into (or out of) a group registers every member.
+    // subtree dragged into (or out of) a group registers every member. A
+    // descendant that's itself a group re-checks its own rectangle instead,
+    // the same way directly dragging that group would.
     dragDescendants.forEach(d=>{
-      if(d.type==='group')return;
+      if(d.type==='group'){regroupNodesForRect(d);return;}
       const g=findGroupContaining(d.x,d.y,d.id);
       d.groupId=g?g.id:null;
     });
@@ -2059,6 +2077,17 @@ canvas.addEventListener('mousedown',e=>{
     setTimeout(()=>startInlineEdit(n),0);
     return;
   }
+  if(e.shiftKey&&!e.ctrlKey&&!e.metaKey&&!connecting){
+    // Shift+drag pans the view even when starting on top of a node/group —
+    // useful once groups cover most of the canvas and there's little truly
+    // empty space left to grab. A plain Shift+click (no real movement)
+    // still reaches the node's own click handler afterward (e.g. the
+    // color-cycle shortcut), since this only tracks movement and never
+    // calls preventDefault/stopPropagation.
+    isPanning=true;canvas.classList.add('grabbing');
+    panStart={x:e.clientX-panX,y:e.clientY-panY};
+    return;
+  }
   if(!connecting&&onEmptyCanvas){
     selected=null;isPanning=true;canvas.classList.add('grabbing');
     panStart={x:e.clientX-panX,y:e.clientY-panY};renderAll();
@@ -2459,12 +2488,16 @@ document.addEventListener('keydown',e=>{
     e.preventDefault();
     const rect=canvas.getBoundingClientRect();
     const mx=rect.width/2, my=rect.height/2;
-    const newScale=1;
+    // Toggle: from anywhere else, jump to 100%; pressing it again while
+    // already at 100% jumps to 1% instead, as a quick way to see the whole
+    // map at a glance without manually zooming all the way out.
+    const atFullZoom=Math.abs(scale-1)<0.001;
+    const newScale=atFullZoom?0.01:1;
     panX=mx-(mx-panX)*(newScale/scale);
     panY=my-(my-panY)*(newScale/scale);
     scale=newScale;
     renderAll();
-    showToast('🔍 拡大率を100%に戻しました');
+    showToast(atFullZoom?'🔍 拡大率を1%にしました':'🔍 拡大率を100%に戻しました');
   }
 
   // X / Shift+X: cycle through search results (same as the next/prev result buttons)
@@ -3726,7 +3759,11 @@ function renderEdges(){
 }
 
 canvas.addEventListener('mousedown',e=>{
-  if(e.button!==0||e.target.closest('.node-el')||e.target.closest('.img-node-el'))return;
+  if(e.button!==0)return;
+  // Shift+drag pans even when starting on top of a node/group — useful once
+  // groups cover most of the canvas and there's little empty space left to
+  // grab (mirrors the same shortcut in the editing app).
+  if(!e.shiftKey&&(e.target.closest('.node-el')||e.target.closest('.img-node-el')||e.target.closest('.group-node-el')))return;
   isPanning=true;canvas.classList.add('grabbing');
   panStart={x:e.clientX-panX,y:e.clientY-panY};
 });
@@ -3984,12 +4021,16 @@ document.addEventListener('keydown',e=>{
     e.preventDefault();
     const rect=canvas.getBoundingClientRect();
     const mx=rect.width/2, my=rect.height/2;
-    const newScale=1;
+    // Toggle: from anywhere else, jump to 100%; pressing it again while
+    // already at 100% jumps to 1% instead, as a quick way to see the whole
+    // map at a glance without manually zooming all the way out.
+    const atFullZoom=Math.abs(scale-1)<0.001;
+    const newScale=atFullZoom?0.01:1;
     panX=mx-(mx-panX)*(newScale/scale);
     panY=my-(my-panY)*(newScale/scale);
     scale=newScale;
     renderAll();
-    showToast('🔍 拡大率を100%に戻しました');
+    showToast(atFullZoom?'🔍 拡大率を1%にしました':'🔍 拡大率を100%に戻しました');
   }
   if(e.key==='x'&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey){
     if(sResults.length>0){
