@@ -64,7 +64,7 @@ html,body{height:100%;background:var(--color-background-secondary);color:var(--c
 #canvas.grabbing{cursor:grabbing}
 #canvas.connecting{cursor:crosshair}
 #canvas.dragover{outline:3px dashed var(--color-text-info);outline-offset:-4px;}
-#svg-layer{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+#svg-layer{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:5}
 
 /* Text nodes */
 .node-el{position:absolute;transform:translate(-50%,-50%);cursor:pointer;z-index:10}
@@ -99,21 +99,26 @@ html,body{height:100%;background:var(--color-background-secondary);color:var(--c
 .group-resize-handle.se{bottom:-7px;right:-7px;cursor:nwse-resize}
 
 /* Hover highlight */
-.node-box.hover-self,.img-node-wrap.hover-self,.group-box.hover-self{
+.node-box.hover-self,.img-node-wrap.hover-self{
   outline:2.5px solid #f5a100;outline-offset:3px;
   box-shadow:0 0 0 4px rgba(245,161,0,.15);
   transform:scale(1.045);
 }
-.node-box.hover-parent,.img-node-wrap.hover-parent,.group-box.hover-parent{
+.node-box.hover-parent,.img-node-wrap.hover-parent{
   outline:2.5px solid #2196f3;outline-offset:3px;
   box-shadow:0 0 0 4px rgba(33,150,243,.15);
   transform:scale(1.02);
 }
-.node-box.hover-child,.img-node-wrap.hover-child,.group-box.hover-child{
+.node-box.hover-child,.img-node-wrap.hover-child{
   outline:2.5px solid #4caf50;outline-offset:3px;
   box-shadow:0 0 0 4px rgba(76,175,80,.15);
   transform:scale(1.02);
 }
+/* Group nodes: outline only — no scale/glow, since enlarging a large frame
+   on hover looks distracting rather than helpful. */
+.group-box.hover-self{outline:2.5px solid #f5a100;outline-offset:3px;}
+.group-box.hover-parent{outline:2.5px solid #2196f3;outline-offset:3px;}
+.group-box.hover-child{outline:2.5px solid #4caf50;outline-offset:3px;}
   .edge.hover-edge{stroke:#f5a100!important;opacity:1!important;transition:stroke-width .15s var(--ease-out)}
   .edge{transition:stroke-width .15s var(--ease-out)}
 
@@ -241,7 +246,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.25</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.26</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -918,19 +923,24 @@ function onGroupResizeMove(e){
   resizingGroup.y=resizeStart.y+usedDy/2;
   renderAll();
 }
+// Re-evaluates group membership for every node against group g's current
+// rectangle: nodes now inside join, members now outside are released.
+// Nodes already claimed by a *different* group are left alone so this can't
+// silently steal another group's members via overlap. Shared by group
+// resize and group drag (both change which nodes fall inside the rect).
+function regroupNodesForRect(g){
+  nodes.forEach(m=>{
+    if(m.type==='group'||m.id===g.id)return;
+    if(m.groupId&&m.groupId!==g.id)return;
+    m.groupId=isPointInGroupRect(m.x,m.y,g)?g.id:null;
+  });
+}
 function onGroupResizeUp(){
   if(resizingGroup){
-    const g=resizingGroup;
     // Resizing changes which nodes geometrically sit inside the group's
     // rectangle: newly-covered nodes join, and members that fell outside the
     // shrunk rectangle are released — mirroring what a drag-in/drag-out does.
-    // Nodes already claimed by a *different* group are left alone so resizing
-    // one group can't silently steal another group's members via overlap.
-    nodes.forEach(m=>{
-      if(m.type==='group'||m.id===g.id)return;
-      if(m.groupId&&m.groupId!==g.id)return;
-      m.groupId=isPointInGroupRect(m.x,m.y,g)?g.id:null;
-    });
+    regroupNodesForRect(resizingGroup);
     pushHistory();
   }
   resizingGroup=null;resizeCorner=null;
@@ -1116,7 +1126,7 @@ function renderEdges(){
       const px=tx+(fx-tx)*mid, py=ty+(fy-ty)*mid;
       if(ptInRoundedRect(px,py,rect))lo=mid;else hi=mid;
     }
-    const s=Math.min(hi,0.8);
+    const s=Math.min(hi,0.995);
     return {x:tx+(fx-tx)*s, y:ty+(fy-ty)*s};
   }
   function bezierPt(p0,p1,p2,t){
@@ -1169,7 +1179,7 @@ function renderEdges(){
     const tx=targetNode.x*scale+panX, ty=targetNode.y*scale+panY;
     let ex=tx, ey=ty;
     const tEl=document.getElementById('node-'+targetNode.id);
-    let rect=null;
+    let rect=null, srect=null;
     if(tEl){
       const r=tEl.getBoundingClientRect();
       // Only give an arrowhead room to sit just outside the node (+4px); a
@@ -1182,6 +1192,31 @@ function renderEdges(){
       // margin so that sliver stays tucked under the node.
       const pad=hasArrow?4:-strokeW/2;
       rect={cx:tx,cy:ty,hw:r.width/2+pad,hh:r.height/2+pad,rad:nodeCornerRadius(targetNode)*scale+pad};
+    }
+    if(sourceNode&&!fixedEnd){
+      const sEl=document.getElementById('node-'+sourceNode.id);
+      if(sEl){
+        const sr=sEl.getBoundingClientRect();
+        // No padding here: no arrowhead is ever drawn at a source, so the
+        // curve should stop flush with the node's own edge, not short of it.
+        // Same half-stroke-width safety margin as the destination side,
+        // so the source end tucks fully under the node too.
+        const spad=-strokeW/2;
+        srect={cx:sx,cy:sy,hw:sr.width/2+spad,hh:sr.height/2+spad,rad:nodeCornerRadius(sourceNode)*scale+spad};
+      }
+    }
+    // The destination always gets its own full, true clip point — this
+    // matters most when it's a large node (e.g. a group): shrinking its
+    // effective boundary just because a nearby source also wants clearance
+    // would stop the line well short of the group's real edge, making it
+    // look like the line dives into the group's interior. The source side
+    // (clipCurveStart, below) naturally degrades instead if there isn't
+    // enough room left for it — collapsing to a zero-length sliver rather
+    // than fighting the destination for space — which is the right
+    // direction to compromise since a plain (opaque) source node hides any
+    // such sliver under itself anyway; only a translucent group as the
+    // *source* in an extremely tight layout could still show a hint of it.
+    if(rect){
       if(fixedEnd){
         ex=fixedEnd.x; ey=fixedEnd.y;
       } else {
@@ -1200,19 +1235,9 @@ function renderEdges(){
     const mx=(sx+ex)/2;
     let p1={x:mx,y:sy};
     const p2={x:ex,y:ey};
-    if(sourceNode){
-      const sEl=document.getElementById('node-'+sourceNode.id);
-      if(sEl){
-        const sr=sEl.getBoundingClientRect();
-        // No padding here: no arrowhead is ever drawn at a source, so the
-        // curve should stop flush with the node's own edge, not short of it.
-        // Same half-stroke-width safety margin as the destination side,
-        // so the source end tucks fully under the node too.
-        const spad=-strokeW/2;
-        const srect={cx:sx,cy:sy,hw:sr.width/2+spad,hh:sr.height/2+spad,rad:nodeCornerRadius(sourceNode)*scale+spad};
-        const clipped=clipCurveStart(p0,p1,p2,srect);
-        p0=clipped.p0; p1=clipped.p1;
-      }
+    if(srect){
+      const clipped=clipCurveStart(p0,p1,p2,srect);
+      p0=clipped.p0; p1=clipped.p1;
     }
     const dAttr=`M${p0.x} ${p0.y} Q${p1.x} ${p1.y} ${p2.x} ${p2.y}`;
     const path=document.createElementNS('http://www.w3.org/2000/svg','path');
@@ -1490,6 +1515,11 @@ function onDragUp(){
       // inside, or leave its current group if it was dragged back out of it.
       const g=findGroupContaining(dragNode.x,dragNode.y,dragNode.id);
       dragNode.groupId=g?g.id:null;
+    } else {
+      // Moving the group itself can also newly cover nodes that weren't
+      // dragged along with it (they just happened to already be sitting
+      // where the group ended up) — pick those up the same way a resize does.
+      regroupNodesForRect(dragNode);
     }
     // Ctrl-dragged descendants moved along with dragNode re-evaluate their
     // own group membership too, exactly like dragNode does, so a whole
@@ -3542,7 +3572,7 @@ function renderEdges(){
       const px=tx+(fx-tx)*mid, py=ty+(fy-ty)*mid;
       if(ptInRoundedRect(px,py,rect))lo=mid;else hi=mid;
     }
-    const s=Math.min(hi,0.8);
+    const s=Math.min(hi,0.995);
     return {x:tx+(fx-tx)*s, y:ty+(fy-ty)*s};
   }
   function bezierPt(p0,p1,p2,t){
@@ -3576,7 +3606,7 @@ function renderEdges(){
     const tx=targetNode.x*scale+panX, ty=targetNode.y*scale+panY;
     let ex=tx,ey=ty;
     const tEl=document.getElementById('node-'+targetNode.id);
-    let rect=null;
+    let rect=null, srect=null;
     if(tEl){
       const r=tEl.getBoundingClientRect();
       // Even a mathematically exact boundary clip can leave a hair of the
@@ -3585,6 +3615,16 @@ function renderEdges(){
       // margin so that sliver stays tucked under the node.
       const pad=hasArrow?4:-strokeW/2;
       rect={cx:tx,cy:ty,hw:r.width/2+pad,hh:r.height/2+pad,rad:nodeCornerRadius(targetNode)*scale+pad};
+    }
+    if(sourceNode&&!fixedEnd){
+      const sEl=document.getElementById('node-'+sourceNode.id);
+      if(sEl){
+        const sr=sEl.getBoundingClientRect();
+        const spad=-strokeW/2;
+        srect={cx:sx,cy:sy,hw:sr.width/2+spad,hh:sr.height/2+spad,rad:nodeCornerRadius(sourceNode)*scale+spad};
+      }
+    }
+    if(rect){
       if(fixedEnd){
         ex=fixedEnd.x; ey=fixedEnd.y;
       } else {
@@ -3596,17 +3636,9 @@ function renderEdges(){
     const mx=(sx+ex)/2;
     let p1={x:mx,y:sy};
     const p2={x:ex,y:ey};
-    if(sourceNode){
-      const sEl=document.getElementById('node-'+sourceNode.id);
-      if(sEl){
-        const sr=sEl.getBoundingClientRect();
-        // Same half-stroke-width safety margin as the destination side,
-        // so the source end tucks fully under the node too.
-        const spad=-strokeW/2;
-        const srect={cx:sx,cy:sy,hw:sr.width/2+spad,hh:sr.height/2+spad,rad:nodeCornerRadius(sourceNode)*scale+spad};
-        const clipped=clipCurveStart(p0,p1,p2,srect);
-        p0=clipped.p0; p1=clipped.p1;
-      }
+    if(srect){
+      const clipped=clipCurveStart(p0,p1,p2,srect);
+      p0=clipped.p0; p1=clipped.p1;
     }
     const path=document.createElementNS('http://www.w3.org/2000/svg','path');
     path.setAttribute('d','M'+p0.x+' '+p0.y+' Q'+p1.x+' '+p1.y+' '+p2.x+' '+p2.y);
@@ -4042,7 +4074,7 @@ html,body{height:100%;background:var(--color-background-secondary);color:var(--c
 #map-title-text{user-select:text}
 #canvas{flex:1;position:relative;overflow:hidden;cursor:grab;user-select:none}
 #canvas.grabbing{cursor:grabbing}
-#svg-layer{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+#svg-layer{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:5}
 .node-el{position:absolute;transform:translate(-50%,-50%);cursor:pointer;z-index:10}
 .node-el.spawn-in{animation:nodeSpawn .45s var(--ease-bounce) both}
 .img-node-el{position:absolute;transform:translate(-50%,-50%);z-index:10}
@@ -4062,9 +4094,12 @@ html,body{height:100%;background:var(--color-background-secondary);color:var(--c
 .img-node-caption{padding:6px 10px;font-size:11px;color:var(--color-text-secondary);border-top:0.5px solid var(--color-border-tertiary);border-radius:0 0 12px 12px;background:var(--color-background-primary);word-break:break-all;white-space:pre-wrap;border:1.5px solid var(--color-border-secondary);border-top:none}
 .search-hit{outline:2.5px solid #f5a623!important;outline-offset:3px}
 .search-current{outline:3px solid #e8430a!important;outline-offset:3px}
-.node-box.hover-self,.img-node-wrap.hover-self,.group-box.hover-self{outline:2.5px solid #f5a100;outline-offset:3px;box-shadow:0 0 0 4px rgba(245,161,0,.15);transform:scale(1.045)}
-.node-box.hover-parent,.img-node-wrap.hover-parent,.group-box.hover-parent{outline:2.5px solid #2196f3;outline-offset:3px;box-shadow:0 0 0 4px rgba(33,150,243,.15);transform:scale(1.02)}
-.node-box.hover-child,.img-node-wrap.hover-child,.group-box.hover-child{outline:2.5px solid #4caf50;outline-offset:3px;box-shadow:0 0 0 4px rgba(76,175,80,.15);transform:scale(1.02)}
+.node-box.hover-self,.img-node-wrap.hover-self{outline:2.5px solid #f5a100;outline-offset:3px;box-shadow:0 0 0 4px rgba(245,161,0,.15);transform:scale(1.045)}
+.node-box.hover-parent,.img-node-wrap.hover-parent{outline:2.5px solid #2196f3;outline-offset:3px;box-shadow:0 0 0 4px rgba(33,150,243,.15);transform:scale(1.02)}
+.node-box.hover-child,.img-node-wrap.hover-child{outline:2.5px solid #4caf50;outline-offset:3px;box-shadow:0 0 0 4px rgba(76,175,80,.15);transform:scale(1.02)}
+.group-box.hover-self{outline:2.5px solid #f5a100;outline-offset:3px}
+.group-box.hover-parent{outline:2.5px solid #2196f3;outline-offset:3px}
+.group-box.hover-child{outline:2.5px solid #4caf50;outline-offset:3px}
   .edge.hover-edge{stroke:#f5a100!important;opacity:1!important;}
 #toolbar{display:flex;align-items:center;gap:6px;padding:8px 12px;background:var(--color-background-primary);border-top:0.5px solid var(--color-border-tertiary);user-select:none}
 button{font-family:var(--font-sans);font-size:12px;padding:5px 10px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-primary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:4px;transition:background .12s,transform .15s var(--ease-out),box-shadow .15s var(--ease-out)}
