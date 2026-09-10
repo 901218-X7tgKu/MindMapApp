@@ -246,7 +246,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.27</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.28</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -706,7 +706,14 @@ function isNodeVisible(nodeId){
     }
     return false;
   }
-  return !hasCollapsedAncestor(nodeId,new Set());
+  if(hasCollapsedAncestor(nodeId,new Set()))return false;
+  // A node inside a group is also hidden whenever the group itself is
+  // hidden (e.g. the group is a collapsed-away tree child) — the group's
+  // members shouldn't keep floating on screen once their container
+  // disappears. Groups can't be nested, so this never recurses in a cycle.
+  const n=nodes.find(nd=>nd.id===nodeId);
+  if(n&&n.groupId&&!isNodeVisible(n.groupId))return false;
+  return true;
 }
 function toggleCollapse(n){
   if(!hasChildren(n.id))return;
@@ -2879,6 +2886,8 @@ function nodeMatchesQuery(n, q){
   const lower=q.toLowerCase();
   if(n.type==='image'){
     if(searchFilters.imageNode&&(n.comment||'').toLowerCase().includes(lower))return true;
+  }else if(n.type==='group'){
+    if(searchFilters.textNode&&(n.title||'').toLowerCase().includes(lower))return true;
   }else{
     if(searchFilters.textNode&&(n.text||'').toLowerCase().includes(lower))return true;
   }
@@ -3390,7 +3399,12 @@ function hasCollapsedAncestor(id,visited){
   }
   return false;
 }
-function isVisible(id){return!hasCollapsedAncestor(id,new Set());}
+function isVisible(id){
+  if(hasCollapsedAncestor(id,new Set()))return false;
+  const n=nodes.find(nd=>nd.id===id);
+  if(n&&n.groupId&&!isVisible(n.groupId))return false;
+  return true;
+}
 function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 ${parseFmtSegments.toString()}
 ${sanitizeFmtColor.toString()}
@@ -3897,6 +3911,8 @@ function nodeMatchesQueryPublic(n,q){
   const lower=q.toLowerCase();
   if(n.type==='image'){
     if(searchFilters.imageNode&&(n.comment||'').toLowerCase().includes(lower))return true;
+  }else if(n.type==='group'){
+    if(searchFilters.textNode&&(n.title||'').toLowerCase().includes(lower))return true;
   }else{
     if(searchFilters.textNode&&(n.text||'').toLowerCase().includes(lower))return true;
   }
