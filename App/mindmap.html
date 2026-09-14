@@ -245,8 +245,8 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
 <div id="app">
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
-    <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.29</span>
+    <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | WASD: スクロール | Shift+S: スライド幅切替 </span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.30</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -506,6 +506,7 @@ let _dupJumpContent=null, _dupJumpIdx=0;      // Ctrl+Shift+click: cycle through
 let ctrlConnectPending=null;                  // ctrl+right-click connect
 let panX=0, panY=0, isPanning=false, panStart={x:0,y:0};
 let scale=1;                                  // zoom
+let wasdStepRatio=0.5;                        // WASDパン時のスライド幅（表示領域比率）。Shift+Sで50%→25%→12.5%を循環
 let collapsedNodes=new Set();                 // ids of collapsed parents
 let ctrlDragging=false;                       // ctrl+drag moves children too
 let hoveredNodeId=null;                       // node currently hovered
@@ -1650,6 +1651,40 @@ function deleteNodeWithDescendants(n){
   if(idsToDelete.has(selected))selected=null;
   pushHistory();renderEdges();
 }
+// Like getAllDescendantIds, but the resulting set is also closed over group
+// membership: whenever a group node ends up in the set, all of its member
+// nodes are pulled in too (and, transitively, their own descendants/groups).
+// Used by Ctrl+Shift+L so that deleting a group node also deletes its
+// members, instead of merely ungrouping them. rootId itself is included in
+// the returned set (unlike getAllDescendantIds).
+function getDeletionSetWithGroupMembers(rootId){
+  const idSet=new Set([rootId]);
+  let changed=true;
+  while(changed){
+    changed=false;
+    edges.forEach(ed=>{
+      if(idSet.has(ed.from)&&!idSet.has(ed.to)){idSet.add(ed.to);changed=true;}
+    });
+    nodes.forEach(m=>{
+      if(m.groupId&&idSet.has(m.groupId)&&!idSet.has(m.id)){idSet.add(m.id);changed=true;}
+    });
+  }
+  return idSet;
+}
+// Ctrl+Shift+L's delete: descendants (via edges) plus, for any group node
+// swept up along the way, its members (and their descendants/groups, closed
+// transitively). See getDeletionSetWithGroupMembers.
+function deleteNodeWithDescendantsAndGroupMembers(n){
+  const idsToDelete=getDeletionSetWithGroupMembers(n.id);
+  nodes=nodes.filter(nd=>!idsToDelete.has(nd.id));
+  edges=edges.filter(ed=>!idsToDelete.has(ed.from)&&!idsToDelete.has(ed.to));
+  idsToDelete.forEach(id=>{
+    collapsedNodes.delete(id);
+    const el=document.getElementById('node-'+id);if(el)el.remove();
+  });
+  if(idsToDelete.has(selected))selected=null;
+  pushHistory();renderEdges();
+}
 function startInlineEdit(n){
   if(n.type!=='text')return; // 画像ノードはモーダル編集のみ
   if(editingNodeId===n.id)return;
@@ -2529,7 +2564,13 @@ document.addEventListener('keydown',e=>{
   // connected group, relative to the group the selected node belongs to (wraps around)
   if((e.key==='n'||e.key==='b')&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey){
     if(selected!==null&&nodes.length>1){
-      const {reps, find, minIdByRoot}=getConnectionGroupReps();
+      const selNode=nodes.find(nd=>nd.id===selected);
+      if(selNode&&selNode.groupId){
+        e.preventDefault();
+        showToast('⚠ グループノードのメンバーは対象外です');
+        return;
+      }
+      const {reps, find, minIdByRoot}=getConnectionGroupReps(true);
       if(reps.length>1){
         e.preventDefault();
         const curMin=minIdByRoot.get(find(selected));
@@ -2583,30 +2624,39 @@ document.addEventListener('keydown',e=>{
     }
   }
 
-  // WASD: pan canvas (75% of viewport width/height per press)
+  // WASD: pan canvas (wasdStepRatio × viewport width/height per press; see Shift+S below)
   if(!e.ctrlKey&&!e.metaKey&&!e.shiftKey){
     const rect=canvas.getBoundingClientRect();
-    const stepX=rect.width*0.5;
-    const stepY=rect.height*0.5;
+    const stepX=rect.width*wasdStepRatio;
+    const stepY=rect.height*wasdStepRatio;
     if(e.key==='a'){e.preventDefault();panX+=stepX;renderAll();}
     if(e.key==='d'){e.preventDefault();panX-=stepX;renderAll();}
     if(e.key==='w'){e.preventDefault();panY+=stepY;renderAll();}
     if(e.key==='s'){e.preventDefault();panY-=stepY;renderAll();}
   }
 
-  // Ctrl+Shift+L: delete selected node and all descendants (with confirmation)
+  // Shift+S: cycle the WASD pan step size 50% → 25% → 12.5% → 50% ...
+  if(e.shiftKey&&!e.ctrlKey&&!e.metaKey&&e.key.toUpperCase()==='S'){
+    e.preventDefault();
+    wasdStepRatio = wasdStepRatio===0.5 ? 0.25 : (wasdStepRatio===0.25 ? 0.125 : 0.5);
+    showToast(`↔ WASDのスライド幅を ${wasdStepRatio*100}% にしました`);
+  }
+
+  // Ctrl+Shift+L: delete selected node, all descendants, and — for any group
+  // node swept up along the way — its member nodes too (with confirmation)
   if((e.ctrlKey||e.metaKey)&&e.shiftKey&&e.key.toLowerCase()==='l'){
     e.preventDefault();
     if(selected===null)return;
     const n=nodes.find(nd=>nd.id===selected);
     if(!n)return;
-    const descendantCount=getAllDescendantIds(n.id).size;
-    const msg=descendantCount>0
-      ? `このノードと子ノード ${descendantCount} 個（計 ${descendantCount+1} 個）を削除します。よろしいですか？`
+    const idsToDelete=getDeletionSetWithGroupMembers(n.id);
+    const extraCount=idsToDelete.size-1;
+    const msg=extraCount>0
+      ? `このノードと関連ノード ${extraCount} 個（計 ${idsToDelete.size} 個）を削除します。よろしいですか？`
       : 'このノードを削除します。よろしいですか？';
     if(window.confirm(msg)){
-      deleteNodeWithDescendants(n);
-      showToast('✓ ノードと子ノードを削除しました');
+      deleteNodeWithDescendantsAndGroupMembers(n);
+      showToast('✓ ノードと関連ノードを削除しました');
     }
     return;
   }
@@ -2936,9 +2986,16 @@ function updateSearchUI(){
 // Groups all nodes into connected components (via edges, undirected), and
 // returns each component's representative node — the one with the lowest ID —
 // sorted ascending by that ID. Used by the N/B key navigation below.
-function getConnectionGroupReps(){
+// When excludeGroupMembers is true (used by N/B only — see below), nodes
+// that belong to a group node (n.groupId set) are excluded entirely from the
+// connected-group computation: they can't be a group's representative, and
+// their edges don't merge groups either (this falls out naturally from them
+// being absent from the `parent` map below). T/E keep the default (false)
+// so their own, unrelated behavior for group members is unchanged.
+function getConnectionGroupReps(excludeGroupMembers=false){
+  const eligible=excludeGroupMembers?nodes.filter(n=>!n.groupId):nodes;
   const parent=new Map();
-  nodes.forEach(n=>parent.set(n.id,n.id));
+  eligible.forEach(n=>parent.set(n.id,n.id));
   function find(x){
     while(parent.get(x)!==x){parent.set(x,parent.get(parent.get(x)));x=parent.get(x);}
     return x;
@@ -2946,7 +3003,7 @@ function getConnectionGroupReps(){
   function union(a,b){const ra=find(a),rb=find(b);if(ra!==rb)parent.set(ra,rb);}
   edges.forEach(e=>{if(parent.has(e.from)&&parent.has(e.to))union(e.from,e.to);});
   const minIdByRoot=new Map();
-  nodes.forEach(n=>{
+  eligible.forEach(n=>{
     const r=find(n.id);
     const cur=minIdByRoot.get(r);
     if(cur===undefined||n.id<cur)minIdByRoot.set(r,n.id);
