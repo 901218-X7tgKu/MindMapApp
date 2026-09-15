@@ -246,7 +246,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | WASD: スクロール | Shift+S: スライド幅切替 </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.30</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.31</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -574,7 +574,7 @@ function serialize(){
     }
   });
   nodes.forEach(n=>{
-    // group membership (text/image nodes only; group nodes can't nest inside another group)
+    // group membership (any node type — group nodes can nest inside another group too)
     if(n.groupId){lines.push(`GROUPMEMBER ${n.id} ${n.groupId}`);}
   });
   nodes.forEach(n=>{
@@ -669,9 +669,9 @@ function deserialize(text){
     n.tags=a?a.tags:[];
     n.status=a?a.status:'';
     n.private=a?a.private:false;
-    if(n.type!=='group'){
-      n.groupId=groupMemberMap.hasOwnProperty(n.id)?groupMemberMap[n.id]:null;
-    }
+    // 通常/画像ノードだけでなく、グループノード自身も別のグループのメンバーに
+    // なれる（ネスト対応）。
+    n.groupId=groupMemberMap.hasOwnProperty(n.id)?groupMemberMap[n.id]:null;
     if(n.type==='image'){
       n.showComment=showCommentMap.hasOwnProperty(n.id)?showCommentMap[n.id]:true;
     }
@@ -711,7 +711,9 @@ function isNodeVisible(nodeId){
   // A node inside a group is also hidden whenever the group itself is
   // hidden (e.g. the group is a collapsed-away tree child) — the group's
   // members shouldn't keep floating on screen once their container
-  // disappears. Groups can't be nested, so this never recurses in a cycle.
+  // disappears. This recurses naturally through nested groups too (a group
+  // can itself be another group's member); the app never lets a containment
+  // cycle form, so the recursion always terminates.
   const n=nodes.find(nd=>nd.id===nodeId);
   if(n&&n.groupId&&!isNodeVisible(n.groupId))return false;
   return true;
@@ -870,6 +872,22 @@ function createGroupNodeEl(n){
   el.addEventListener('mouseenter',()=>{hoveredNodeId=n.id;applyHoverHighlight();});
   el.addEventListener('mouseleave',()=>{hoveredNodeId=null;applyHoverHighlight();});
 }
+// Nesting depth of a group node — 0 for a top-level group, 1 for a group
+// that's a member of another group, 2 for a group nested two levels deep,
+// etc. Used purely for stacking order (see renderGroupNode): without this,
+// two overlapping group boxes fall back to DOM/creation order, which has no
+// relationship to which one is visually "inside" the other.
+function groupNestingDepth(n){
+  let depth=0;
+  let cur=n;
+  const seen=new Set();
+  while(cur&&cur.groupId!=null&&!seen.has(cur.id)){
+    seen.add(cur.id);
+    depth++;
+    cur=nodes.find(nd=>nd.id===cur.groupId);
+  }
+  return depth;
+}
 function renderGroupNode(n){
   let el=document.getElementById('node-'+n.id);
   if(!el){createGroupNodeEl(n);el=document.getElementById('node-'+n.id);}
@@ -878,6 +896,10 @@ function renderGroupNode(n){
   el.style.left=sx+'px';
   el.style.top=sy+'px';
   el.style.transform=`translate(-50%,-50%) scale(${scale})`;
+  // A group nested inside another group must always draw above its outer
+  // container so it (and its own members/handles) stay visible and
+  // clickable, regardless of which one happens to exist in the DOM first.
+  el.style.zIndex=1+groupNestingDepth(n);
   const visible=isNodeVisible(n.id);
   el.classList.toggle('hidden',!visible);
   if(!visible)return;
@@ -934,21 +956,50 @@ function onGroupResizeMove(e){
 // Re-evaluates group membership for every node against group g's current
 // rectangle: nodes now inside join, members now outside are released.
 // Nodes already claimed by a *different* group are left alone so this can't
-// silently steal another group's members via overlap. Shared by group
-// resize and group drag (both change which nodes fall inside the rect).
-function regroupNodesForRect(g){
+// silently steal another group's members via overlap. A group node can also
+// join another group this way (nested groups), except one of its own
+// (possibly nested) members — that would create a containment cycle.
+// `protectedId`, if given, is never (re)assigned as g's member here — used
+// so a group that was just confirmed as g's own *outer* container can't
+// also get claimed as g's member in the same pass (see callers below: with
+// two heavily-overlapping group rectangles, each one's center can land
+// inside the other's, so which relationship "wins" must be decided once,
+// consistently, rather than left to whichever check happens to run first).
+// Shared by group resize and group drag (both change which nodes fall
+// inside the rect).
+function regroupNodesForRect(g,protectedId){
   nodes.forEach(m=>{
-    if(m.type==='group'||m.id===g.id)return;
+    if(m.id===g.id)return;
+    if(protectedId!=null&&m.id===protectedId)return;
     if(m.groupId&&m.groupId!==g.id)return;
+    if(m.type==='group'){
+      // Group-vs-group uses full-rectangle containment (see
+      // isGroupRectFullyInside) rather than a center-point check — see
+      // findEnclosingGroup for why.
+      if(isGroupAncestorOf(m.id,g.id))return;
+      m.groupId=isGroupRectFullyInside(m,g)?g.id:null;
+      return;
+    }
     m.groupId=isPointInGroupRect(m.x,m.y,g)?g.id:null;
   });
 }
 function onGroupResizeUp(){
   if(resizingGroup){
+    // Resizing also shifts the group's own center (see onGroupResizeMove), so
+    // it can newly land inside — or move out of — an outer group's rectangle
+    // too. It can never join itself or one of its own (possibly nested)
+    // members, which would create a containment cycle. Decided *before* the
+    // regroup call below (and protected from it) so two heavily-overlapping
+    // group rectangles can't end up claiming each other in a race — see the
+    // comment on regroupNodesForRect.
+    const ownIds=getAllGroupMemberIds(resizingGroup.id);
+    ownIds.add(resizingGroup.id);
+    const outerGroup=findEnclosingGroup(resizingGroup,ownIds);
+    resizingGroup.groupId=outerGroup?outerGroup.id:null;
     // Resizing changes which nodes geometrically sit inside the group's
     // rectangle: newly-covered nodes join, and members that fell outside the
     // shrunk rectangle are released — mirroring what a drag-in/drag-out does.
-    regroupNodesForRect(resizingGroup);
+    regroupNodesForRect(resizingGroup,outerGroup?outerGroup.id:null);
     pushHistory();
   }
   resizingGroup=null;resizeCorner=null;
@@ -960,14 +1011,106 @@ function isPointInGroupRect(x,y,g){
   const left=g.x-w/2, right=g.x+w/2, top=g.y-h/2, bottom=g.y+h/2;
   return x>=left&&x<=right&&y>=top&&y<=bottom;
 }
-// Find the group (if any) whose rectangle contains world point (x,y), excluding excludeId.
-function findGroupContaining(x,y,excludeId){
+// True if the whole of `inner`'s rectangle sits inside `outer`'s rectangle.
+// Used (only) for deciding group-vs-group nesting, instead of a simple
+// center-point check: group boxes are large, so two overlapping boxes can
+// easily have each other's *center* inside the other's rect too (e.g. a
+// small group dropped near the middle of a big one — the natural way to
+// "put it inside" — also puts the big group's own center inside the small
+// one). A center-only check can't tell which one is really "the container"
+// in that case; full-rectangle containment is directional and isn't
+// ambiguous like that (short of two identical, exactly-aligned rectangles,
+// an edge case not worth special-casing).
+function isGroupRectFullyInside(inner,outer){
+  const iw=inner.width||320, ih=inner.height||220;
+  const il=inner.x-iw/2, ir=inner.x+iw/2, it=inner.y-ih/2, ib=inner.y+ih/2;
+  const ow=outer.width||320, oh=outer.height||220;
+  const ol=outer.x-ow/2, orr=outer.x+ow/2, ot=outer.y-oh/2, ob=outer.y+oh/2;
+  return il>=ol&&ir<=orr&&it>=ot&&ib<=ob;
+}
+// Find the group (if any) whose rectangle contains world point (x,y).
+// excludeIds may be a single id or a Set of ids to exclude from candidacy —
+// used so a group can't become its own container, nor the container of one
+// of its own (possibly nested) members, which would create a cycle.
+// For plain (non-group) nodes only — see findEnclosingGroup for groups.
+function findGroupContaining(x,y,excludeIds){
+  const excl=excludeIds instanceof Set?excludeIds:new Set([excludeIds]);
   let found=null;
   nodes.forEach(g=>{
-    if(g.type!=='group'||g.id===excludeId)return;
+    if(g.type!=='group'||excl.has(g.id))return;
     if(isPointInGroupRect(x,y,g))found=g;
   });
   return found;
+}
+// Like findGroupContaining, but for deciding a *group* node g's own outer
+// container: uses full-rectangle containment (isGroupRectFullyInside)
+// instead of a center-point check, so two overlapping group boxes can't
+// ambiguously "contain" each other — only a candidate that genuinely,
+// fully encloses g's rectangle counts. When g sits inside nested groups
+// (e.g. A contains B contains g), *every* ancestor's rectangle typically
+// encloses g too, not just the immediate parent B — so among all enclosing
+// candidates, the smallest one (the tightest fit) is picked, since that's
+// always the true immediate parent. Picking "whichever is found last" (by
+// array/id order) instead would sometimes reattach g to a distant outer
+// ancestor rather than its real parent, depending on node order alone.
+function findEnclosingGroup(g,excludeIds){
+  const excl=excludeIds instanceof Set?excludeIds:new Set([excludeIds]);
+  let found=null;
+  let foundArea=Infinity;
+  nodes.forEach(cand=>{
+    if(cand.type!=='group'||excl.has(cand.id))return;
+    if(!isGroupRectFullyInside(g,cand))return;
+    const area=(cand.width||320)*(cand.height||220);
+    if(area<foundArea){found=cand;foundArea=area;}
+  });
+  return found;
+}
+// Returns true if `containerId` is an ancestor container of `nodeId` in the
+// current group-nesting hierarchy — i.e. nodeId sits inside containerId,
+// directly or via nested sub-groups. Used to block a move/resize that would
+// otherwise create a containment cycle (a group ending up nested inside one
+// of its own members).
+function isGroupAncestorOf(containerId,nodeId){
+  let cur=nodes.find(nd=>nd.id===nodeId);
+  const seen=new Set();
+  while(cur&&cur.groupId!=null&&!seen.has(cur.id)){
+    if(cur.groupId===containerId)return true;
+    seen.add(cur.id);
+    cur=nodes.find(nd=>nd.id===cur.groupId);
+  }
+  return false;
+}
+// All ids of nodes that are members of `groupId`, directly or via nested
+// sub-groups (members of members, recursively). Used so a dragged/resized
+// group can correctly re-check its own outer container without ever being
+// allowed to end up "inside" itself or one of its own nested members.
+function getAllGroupMemberIds(groupId){
+  const result=new Set();
+  const queue=[groupId];
+  while(queue.length){
+    const gid=queue.shift();
+    nodes.forEach(m=>{
+      if(m.groupId===gid&&!result.has(m.id)){
+        result.add(m.id);
+        if(m.type==='group')queue.push(m.id);
+      }
+    });
+  }
+  return result;
+}
+// Moves every node currently inside group `groupId` by (dx,dy) — direct
+// members, and (recursively) any nested sub-group's own members too — so a
+// dragged group's full contents travel with it regardless of nesting depth.
+// `skipIds`, if given, excludes ids already being moved through some other
+// path (e.g. tree-descendant ctrl-dragging), so a node that happens to be
+// both a tree-descendant *and* a group member isn't shifted twice.
+function moveGroupMembers(groupId,dx,dy,skipIds){
+  nodes.forEach(m=>{
+    if(m.groupId!==groupId)return;
+    if(skipIds&&skipIds.has(m.id))return;
+    m.x+=dx;m.y+=dy;
+    if(m.type==='group')moveGroupMembers(m.id,dx,dy,skipIds);
+  });
 }
 function onGroupNodeRightClick(e,n){
   e.preventDefault();e.stopPropagation();
@@ -1427,7 +1570,7 @@ function makeImgNode(src,x,y,comment='',width=0){
   nodes.push(n);createImgNodeEl(n);renderNode(n);renderEdges();return n;
 }
 function makeGroupNode(x,y,width=320,height=220,colorIdx=5){
-  const n={id:nodeId++,type:'group',x,y,width,height,colorIdx,title:'',url:'',tags:[],status:'',private:false};
+  const n={id:nodeId++,type:'group',x,y,width,height,colorIdx,title:'',groupId:null,url:'',tags:[],status:'',private:false};
   nodes.push(n);createGroupNodeEl(n);renderNode(n);renderEdges();return n;
 }
 // ── Tag parsing helpers ────────────────────────────────────
@@ -1508,27 +1651,25 @@ function onDragMove(e){
   const nx=e.clientX/scale-dragOffset.x, ny=e.clientY/scale-dragOffset.y;
   const dx=nx-dragNode.x, dy=ny-dragNode.y;
   dragNode.x=nx;dragNode.y=ny;
+  // ids already being moved via the tree-descendant (ctrl-drag) path, so the
+  // group-membership moves below don't shift the same node twice if it
+  // happens to be both a tree-descendant *and* a group member.
+  const descIdSet=ctrlDragging?new Set(dragDescendants.map(d=>d.id)):null;
   if(ctrlDragging){
-    // A descendant that's itself a group carries its own members along too,
-    // exactly like directly dragging that group would — otherwise a group
-    // sitting further down the tree gets moved while its members are left
-    // behind. Skip any member that's *also* an independent tree-descendant
-    // here (it's already being moved by the loop itself) so it isn't
-    // shifted twice.
-    const descIdSet=new Set(dragDescendants.map(d=>d.id));
+    // A descendant that's itself a group carries its own members along too
+    // (recursively, through any further nested sub-groups), exactly like
+    // directly dragging that group would — otherwise a group sitting
+    // further down the tree gets moved while its contents are left behind.
     dragDescendants.forEach(d=>{
       d.x+=dx;d.y+=dy;
-      if(d.type==='group'){
-        nodes.forEach(m=>{
-          if(m.groupId===d.id&&!descIdSet.has(m.id)){m.x+=dx;m.y+=dy;}
-        });
-      }
+      if(d.type==='group')moveGroupMembers(d.id,dx,dy,descIdSet);
     });
   }
-  // Dragging a group node carries all of its member nodes (n.groupId===dragNode.id)
-  // along with it, regardless of the tree-edge-based ctrlDragging above.
+  // Dragging a group node carries all of its contents along with it — direct
+  // members, and (recursively) any nested sub-group's own members too —
+  // regardless of the tree-edge-based ctrlDragging above.
   if(dragNode.type==='group'){
-    nodes.forEach(m=>{if(m.groupId===dragNode.id){m.x+=dx;m.y+=dy;}});
+    moveGroupMembers(dragNode.id,dx,dy,descIdSet);
   }
   renderAll();
 }
@@ -1540,18 +1681,36 @@ function onDragUp(){
       const g=findGroupContaining(dragNode.x,dragNode.y,dragNode.id);
       dragNode.groupId=g?g.id:null;
     } else {
+      // The group itself can also become a member of an outer group it was
+      // dropped into (nested groups). It must never join itself or any of
+      // its own (possibly nested) members — that would create a cycle.
+      // Decided *before* the regroup call below (and protected from it) so
+      // two heavily-overlapping group rectangles can't end up claiming each
+      // other in a race — see the comment on regroupNodesForRect.
+      const ownIds=getAllGroupMemberIds(dragNode.id);
+      ownIds.add(dragNode.id);
+      const outerGroup=findEnclosingGroup(dragNode,ownIds);
+      dragNode.groupId=outerGroup?outerGroup.id:null;
       // Moving the group itself can also newly cover nodes that weren't
       // dragged along with it (they just happened to already be sitting
       // where the group ended up) — pick those up the same way a resize does.
-      regroupNodesForRect(dragNode);
+      regroupNodesForRect(dragNode,outerGroup?outerGroup.id:null);
     }
     // Ctrl-dragged descendants moved along with dragNode re-evaluate their
     // own group membership too, exactly like dragNode does, so a whole
     // subtree dragged into (or out of) a group registers every member. A
     // descendant that's itself a group re-checks its own rectangle instead,
-    // the same way directly dragging that group would.
+    // the same way directly dragging that group would, and can likewise pick
+    // up (or leave) an outer group of its own.
     dragDescendants.forEach(d=>{
-      if(d.type==='group'){regroupNodesForRect(d);return;}
+      if(d.type==='group'){
+        const ownIds=getAllGroupMemberIds(d.id);
+        ownIds.add(d.id);
+        const outerGroup=findEnclosingGroup(d,ownIds);
+        d.groupId=outerGroup?outerGroup.id:null;
+        regroupNodesForRect(d,outerGroup?outerGroup.id:null);
+        return;
+      }
       const g=findGroupContaining(d.x,d.y,d.id);
       d.groupId=g?g.id:null;
     });
@@ -2886,10 +3045,13 @@ document.addEventListener('keydown',e=>{
       });
       // If a pasted node (still ungrouped after the remap above) lands inside
       // an existing group's rectangle, join that group — same rule as a
-      // manual drag-and-drop.
+      // manual drag-and-drop. Applies to a pasted group node too (nested
+      // groups; uses full-rectangle containment like a dragged group would,
+      // see findEnclosingGroup) — a fresh paste can't create a containment
+      // cycle since every id involved is brand new.
       newNodes.forEach(n=>{
-        if(n.type!=='group'&&!n.groupId){
-          const g=findGroupContaining(n.x,n.y,n.id);
+        if(!n.groupId){
+          const g=n.type==='group'?findEnclosingGroup(n,n.id):findGroupContaining(n.x,n.y,n.id);
           if(g)n.groupId=g.id;
         }
       });
@@ -2909,9 +3071,12 @@ document.addEventListener('keydown',e=>{
       n.groupId=null; // single-node paste starts ungrouped, unless...
       n.x=lastMousePos.x+20;
       n.y=lastMousePos.y+20;
-      if(n.type!=='group'){
-        // ...it happens to land inside an existing group's rectangle.
-        const g=findGroupContaining(n.x,n.y,n.id);
+      // ...it happens to land inside an existing group's rectangle (a pasted
+      // group node can join too — nested groups, using full-rectangle
+      // containment like a dragged group would — since a fresh paste can't
+      // create a containment cycle).
+      {
+        const g=n.type==='group'?findEnclosingGroup(n,n.id):findGroupContaining(n.x,n.y,n.id);
         if(g)n.groupId=g.id;
       }
       nodes.push(n);
@@ -3300,10 +3465,19 @@ function generatePublicHtml(){
   });
   // A private group's members (linked via groupId, not tree edges) must be
   // excluded too, or their content would still leak into the public export
-  // even though the group frame around them is hidden.
-  nodes.forEach(n=>{
-    if(n.groupId&&excludedIds.has(n.groupId))excludedIds.add(n.id);
-  });
+  // even though the group frame around them is hidden. Repeated to a fixed
+  // point so members of members (a nested sub-group's own members) are
+  // excluded transitively as well, regardless of node array order.
+  let addedMore=true;
+  while(addedMore){
+    addedMore=false;
+    nodes.forEach(n=>{
+      if(n.groupId&&excludedIds.has(n.groupId)&&!excludedIds.has(n.id)){
+        excludedIds.add(n.id);
+        addedMore=true;
+      }
+    });
+  }
   const origNodes=nodes, origEdges=edges, origCollapsed=collapsedNodes;
   let mapData;
   if(excludedIds.size>0){
