@@ -246,7 +246,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | WASD: スクロール | Shift+S: スライド幅切替 </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.31</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.32</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -2719,8 +2719,11 @@ document.addEventListener('keydown',e=>{
     }
   }
 
-  // N / B: center on the representative (lowest-id) node of the next/previous
-  // connected group, relative to the group the selected node belongs to (wraps around)
+  // N / B: center on the "top" node — shallowest hierarchy level, then
+  // lowest id among ties — of the next/previous connected group, relative
+  // to the group the selected node belongs to (wraps around). Same
+  // level-then-id rule as the T key, just applied to the target group
+  // instead of the current one.
   if((e.key==='n'||e.key==='b')&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey){
     if(selected!==null&&nodes.length>1){
       const selNode=nodes.find(nd=>nd.id===selected);
@@ -2734,8 +2737,14 @@ document.addEventListener('keydown',e=>{
         e.preventDefault();
         const curMin=minIdByRoot.get(find(selected));
         const idx=reps.indexOf(curMin);
-        const targetId=e.key==='n'?reps[(idx+1+reps.length)%reps.length]:reps[(idx-1+reps.length)%reps.length];
-        centerOnNode(targetId);
+        const targetMinId=e.key==='n'?reps[(idx+1+reps.length)%reps.length]:reps[(idx-1+reps.length)%reps.length];
+        const targetRoot=find(targetMinId);
+        const levels=computeNodeLevels();
+        const groupNodes=nodes.filter(n=>!n.groupId&&find(n.id)===targetRoot);
+        const minLevel=Math.min(...groupNodes.map(n=>levels.get(n.id)));
+        const candidates=groupNodes.filter(n=>levels.get(n.id)===minLevel);
+        const target=candidates.reduce((min,n)=>n.id<min.id?n:min,candidates[0]);
+        centerOnNode(target.id);
         showToast(e.key==='n'?'📍 次のグループのノードを中央に表示しました':'📍 前のグループのノードを中央に表示しました');
       } else {
         e.preventDefault();
@@ -3583,9 +3592,9 @@ function deserialize(text){
     n.url=a?a.url:'';
     n.tags=a?a.tags:[];
     n.status=a?a.status:'';
-    if(n.type!=='group'){
-      n.groupId=groupMemberMap.hasOwnProperty(n.id)?groupMemberMap[n.id]:null;
-    }
+    // 通常/画像ノードだけでなく、グループノード自身も別のグループのメンバーに
+    // なれる（ネスト対応）。
+    n.groupId=groupMemberMap.hasOwnProperty(n.id)?groupMemberMap[n.id]:null;
     if(n.type==='image'){
       n.showComment=showCommentMap.hasOwnProperty(n.id)?showCommentMap[n.id]:true;
     }
@@ -3600,6 +3609,7 @@ const collapsed=new Set(result.nodes._collapsed||[]);
 delete result.nodes._collapsed;
 
 let panX=0,panY=0,scale=1,isPanning=false,panStart={x:0,y:0};
+let wasdStepRatio=0.5; // WASDパン時のスライド幅（表示領域比率）。Shift+Sで50%→25%→12.5%を循環
 const canvas=document.getElementById('canvas');
 const svgEl=document.getElementById('svg-layer');
 const nodesLayer=document.getElementById('nodes-layer');
@@ -3770,6 +3780,10 @@ function renderAll(){
       const gw=n.width||320, gh=n.height||220;
       const labelText=(n.title||'').trim()?escHtml(n.title):'▭';
       el.innerHTML='<div class="group-box" style="width:'+gw+'px;height:'+gh+'px;background:'+c.bg+'40;border-color:'+c.border+'"><div class="group-label" style="color:'+c.border+';max-width:'+(gw-20)+'px">'+labelText+'</div></div>';
+      // A group nested inside another group must always draw above its
+      // outer container so it stays visible, regardless of which one
+      // happens to exist in the DOM first (see groupNestingDepth).
+      el.style.zIndex=1+groupNestingDepth(n);
     } else {
       const w=n.width||180;
       const showComment=n.showComment!==false;
@@ -4183,6 +4197,98 @@ function centerOn(id,andRender=true){
   panX=rect.width/2-n.x*scale;panY=rect.height/2-n.y*scale;
   if(andRender){renderAll();applySHL();}
 }
+// The public viewer has no persistent "selected node" concept (nodes are
+// only click-to-jump or double-click-to-collapse, never left-click-select
+// like the editor). So T/E/N/B below all anchor on "whichever visible node
+// is nearest the current screen center" instead — pan/zoom to put a node
+// roughly in the middle, then use the keys, the same way Z/C already center
+// the view on a specific node.
+function findNearestNodeToCenter(){
+  const rect=canvas.getBoundingClientRect();
+  const wx=(rect.width/2-panX)/scale;
+  const wy=(rect.height/2-panY)/scale;
+  let best=null,bestDist=Infinity;
+  nodes.forEach(n=>{
+    if(!isVisible(n.id))return;
+    const dx=n.x-wx, dy=n.y-wy;
+    const d=dx*dx+dy*dy;
+    if(d<bestDist){bestDist=d;best=n;}
+  });
+  return best;
+}
+function getAllDescendantIds(rootId){
+  const result=new Set();
+  const queue=[rootId];
+  while(queue.length){
+    const id=queue.shift();
+    edges.forEach(e=>{
+      if(e.from===id&&!result.has(e.to)){
+        result.add(e.to);
+        queue.push(e.to);
+      }
+    });
+  }
+  return result;
+}
+// Nesting depth of a group node — 0 for a top-level group, 1 for a group
+// that's a member of another group, etc. — used purely for stacking order
+// so a nested group's box always draws above its outer container.
+function groupNestingDepth(n){
+  let depth=0;
+  let cur=n;
+  const seen=new Set();
+  while(cur&&cur.groupId!=null&&!seen.has(cur.id)){
+    seen.add(cur.id);
+    depth++;
+    cur=nodes.find(nd=>nd.id===cur.groupId);
+  }
+  return depth;
+}
+// See the editor's own getConnectionGroupReps/computeNodeLevels for the
+// full rationale (kept in sync manually since this is a separate, standalone
+// copy embedded in the exported HTML).
+function getConnectionGroupReps(excludeGroupMembers=false){
+  const eligible=excludeGroupMembers?nodes.filter(n=>!n.groupId):nodes;
+  const parent=new Map();
+  eligible.forEach(n=>parent.set(n.id,n.id));
+  function find(x){
+    while(parent.get(x)!==x){parent.set(x,parent.get(parent.get(x)));x=parent.get(x);}
+    return x;
+  }
+  function union(a,b){const ra=find(a),rb=find(b);if(ra!==rb)parent.set(ra,rb);}
+  edges.forEach(e=>{if(parent.has(e.from)&&parent.has(e.to))union(e.from,e.to);});
+  const minIdByRoot=new Map();
+  eligible.forEach(n=>{
+    const r=find(n.id);
+    const cur=minIdByRoot.get(r);
+    if(cur===undefined||n.id<cur)minIdByRoot.set(r,n.id);
+  });
+  const reps=[...minIdByRoot.values()].sort((a,b)=>a-b);
+  return {reps, find, minIdByRoot};
+}
+function computeNodeLevels(){
+  const level=new Map();
+  const inDegree=new Map();
+  nodes.forEach(n=>inDegree.set(n.id,0));
+  edges.forEach(ed=>{if(inDegree.has(ed.to))inDegree.set(ed.to,inDegree.get(ed.to)+1);});
+  const queue=[];
+  nodes.forEach(n=>{if(inDegree.get(n.id)===0){level.set(n.id,0);queue.push(n.id);}});
+  let qi=0;
+  while(qi<queue.length){
+    const cur=queue[qi++];
+    const curLevel=level.get(cur);
+    edges.forEach(ed=>{
+      if(ed.from!==cur)return;
+      const existing=level.get(ed.to);
+      if(existing===undefined||curLevel+1<existing){
+        level.set(ed.to,curLevel+1);
+        queue.push(ed.to);
+      }
+    });
+  }
+  nodes.forEach(n=>{if(!level.has(n.id))level.set(n.id,0);});
+  return level;
+}
 let _dupJumpContent=null,_dupJumpIdx=0;
 let toastTimer=null;
 function showToast(msg){
@@ -4302,13 +4408,53 @@ document.addEventListener('keydown',e=>{
       updateSearchUI();
     }
   }
+
+  // N/B: same "jump to next/previous connected group" shortcut as the
+  // editor. The public viewer has no persistent node selection, so this
+  // anchors on the node nearest the current screen center (see
+  // findNearestNodeToCenter) instead of a selected node.
+  if((e.key==='n'||e.key==='b')&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey){
+    const anchor=findNearestNodeToCenter();
+    if(anchor&&nodes.length>1){
+      if(anchor.groupId){
+        e.preventDefault();
+        showToast('⚠ グループノードのメンバーは対象外です');
+        return;
+      }
+      const {reps, find, minIdByRoot}=getConnectionGroupReps(true);
+      if(reps.length>1){
+        e.preventDefault();
+        const curMin=minIdByRoot.get(find(anchor.id));
+        const idx=reps.indexOf(curMin);
+        const targetMinId=e.key==='n'?reps[(idx+1+reps.length)%reps.length]:reps[(idx-1+reps.length)%reps.length];
+        const targetRoot=find(targetMinId);
+        const levels=computeNodeLevels();
+        const groupNodes=nodes.filter(n=>!n.groupId&&find(n.id)===targetRoot);
+        const minLevel=Math.min(...groupNodes.map(n=>levels.get(n.id)));
+        const candidates=groupNodes.filter(n=>levels.get(n.id)===minLevel);
+        const target=candidates.reduce((min,n)=>n.id<min.id?n:min,candidates[0]);
+        centerOn(target.id);
+        showToast(e.key==='n'?'📍 次のグループのノードを中央に表示しました':'📍 前のグループのノードを中央に表示しました');
+      } else {
+        e.preventDefault();
+        showToast('⚠ 他の接続グループがありません');
+      }
+    }
+  }
+
   if(!e.ctrlKey&&!e.metaKey&&!e.shiftKey){
     const rect=canvas.getBoundingClientRect();
-    const stepX=rect.width*0.5;const stepY=rect.height*0.5;
+    const stepX=rect.width*wasdStepRatio;const stepY=rect.height*wasdStepRatio;
     if(e.key==='a'){e.preventDefault();panX+=stepX;renderAll();}
     if(e.key==='d'){e.preventDefault();panX-=stepX;renderAll();}
     if(e.key==='w'){e.preventDefault();panY+=stepY;renderAll();}
     if(e.key==='s'){e.preventDefault();panY-=stepY;renderAll();}
+  }
+  // Shift+S: cycle the WASD pan step size 50% → 25% → 12.5% → 50% ...
+  if(e.shiftKey&&!e.ctrlKey&&!e.metaKey&&e.key.toUpperCase()==='S'){
+    e.preventDefault();
+    wasdStepRatio = wasdStepRatio===0.5 ? 0.25 : (wasdStepRatio===0.25 ? 0.125 : 0.5);
+    showToast(\`↔ WASDのスライド幅を \${wasdStepRatio*100}% にしました\`);
   }
 });
 
@@ -4434,7 +4580,7 @@ button.active{background:var(--color-background-info);border-color:var(--color-b
 <div id="app">
   <div id="header">
     <h1>🌐 ${escHtmlStr(title)}</h1>
-    <span style="font-size:11px;color:var(--color-text-tertiary)">クリック: 展開/折り畳み | 右クリック: タグ・ステータスを確認 | Ctrl+Shift+右クリック: URLを開く | ホイール: ズーム | ドラッグ: 移動 | WASD: スクロール | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | Ctrl+Shift+クリック: 同じ内容のノードへジャンプ</span>
+    <span style="font-size:11px;color:var(--color-text-tertiary)">クリック: 展開/折り畳み | 右クリック: タグ・ステータスを確認 | Ctrl+Shift+右クリック: URLを開く | ホイール: ズーム | ドラッグ: 移動 | WASD: スクロール | Shift+S: スライド幅切替 | N/B: 次/前の接続グループへ | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | Ctrl+Shift+クリック: 同じ内容のノードへジャンプ</span>
     <button id="btn-theme" style="margin-left:8px;padding:4px 10px"><i id="theme-icon" class="ti ti-moon"></i> <span id="theme-label">ダーク</span></button>
   </div>
   <div id="canvas">
