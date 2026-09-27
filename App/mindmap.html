@@ -248,7 +248,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | WASD: スクロール | Shift+S: スライド幅切替 </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.34</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.35</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -1148,15 +1148,45 @@ function getAllGroupMemberIds(groupId){
 // Moves every node currently inside group `groupId` by (dx,dy) — direct
 // members, and (recursively) any nested sub-group's own members too — so a
 // dragged group's full contents travel with it regardless of nesting depth.
+// This much always happens, on a plain (non-Ctrl) drag too.
+// When `includeMemberDescendants` is true, a member's own tree-descendants
+// (via edges) that are *not* members of this group are carried along as
+// well, since "move everything below" is the whole point of holding Ctrl —
+// otherwise a member's non-member children are left in place. A plain drag
+// of the group passes false: only the group and its members move.
 // `skipIds`, if given, excludes ids already being moved through some other
 // path (e.g. tree-descendant ctrl-dragging), so a node that happens to be
 // both a tree-descendant *and* a group member isn't shifted twice.
-function moveGroupMembers(groupId,dx,dy,skipIds){
+// `movedIds` tracks every id already shifted during this whole
+// moveGroupMembers call (including nested recursion), so a node reachable
+// through more than one path (e.g. a non-member descendant shared by two
+// members, or a descendant that also happens to be a member of this same
+// group) is never moved twice.
+// `extraList`, if given, collects every non-member descendant node moved
+// this way, so the caller can re-evaluate each one's own group membership
+// once the drag ends (matching how a normally-dragged node would).
+function moveGroupMembers(groupId,dx,dy,skipIds,movedIds,extraList,includeMemberDescendants){
+  if(!movedIds)movedIds=new Set();
+  const memberIds=getAllGroupMemberIds(groupId);
   nodes.forEach(m=>{
     if(m.groupId!==groupId)return;
     if(skipIds&&skipIds.has(m.id))return;
+    if(movedIds.has(m.id))return;
     m.x+=dx;m.y+=dy;
-    if(m.type==='group')moveGroupMembers(m.id,dx,dy,skipIds);
+    movedIds.add(m.id);
+    if(m.type==='group')moveGroupMembers(m.id,dx,dy,skipIds,movedIds,extraList,includeMemberDescendants);
+    if(!includeMemberDescendants)return;
+    getAllDescendants(m.id).forEach(did=>{
+      if(memberIds.has(did))return; // handled by the membership loop itself
+      if(skipIds&&skipIds.has(did))return;
+      if(movedIds.has(did))return;
+      const dNode=nodes.find(nd=>nd.id===did);
+      if(!dNode)return;
+      dNode.x+=dx;dNode.y+=dy;
+      movedIds.add(did);
+      if(extraList)extraList.push(dNode);
+      if(dNode.type==='group')moveGroupMembers(dNode.id,dx,dy,skipIds,movedIds,extraList,includeMemberDescendants);
+    });
   });
 }
 function onGroupNodeRightClick(e,n){
@@ -1679,7 +1709,7 @@ function findChildPosition(parent){
 }
 
 // ── Drag nodes ────────────────────────────────────────────
-let dragNode=null,dragOffset={x:0,y:0},didDrag=false,dragDescendants=[];
+let dragNode=null,dragOffset={x:0,y:0},didDrag=false,dragDescendants=[],dragExtraDescendants=[];
 function onNodeMouseDown(e,n){
   if(connecting||e.shiftKey)return;e.stopPropagation();if(e.button!==0)return;
   dragNode=n;didDrag=false;
@@ -1690,6 +1720,7 @@ function onNodeMouseDown(e,n){
     const descIds=getAllDescendants(n.id);
     dragDescendants=nodes.filter(nd=>descIds.has(nd.id));
   } else {dragDescendants=[];}
+  dragExtraDescendants=[];
   dragOffset={x:e.clientX/scale-n.x, y:e.clientY/scale-n.y};
   document.addEventListener('mousemove',onDragMove);document.addEventListener('mouseup',onDragUp);
 }
@@ -1700,23 +1731,34 @@ function onDragMove(e){
   dragNode.x=nx;dragNode.y=ny;
   // ids already being moved via the tree-descendant (ctrl-drag) path, so the
   // group-membership moves below don't shift the same node twice if it
-  // happens to be both a tree-descendant *and* a group member.
+  // happens to be both a tree-descendant *and* a group member. Shared as
+  // `movedIds` across every moveGroupMembers call below (and its recursion)
+  // so a node reachable through more than one of those paths is also only
+  // ever shifted once.
   const descIdSet=ctrlDragging?new Set(dragDescendants.map(d=>d.id)):null;
+  const movedIds=descIdSet?new Set(descIdSet):new Set();
+  dragExtraDescendants=[];
   if(ctrlDragging){
     // A descendant that's itself a group carries its own members along too
     // (recursively, through any further nested sub-groups), exactly like
     // directly dragging that group would — otherwise a group sitting
     // further down the tree gets moved while its contents are left behind.
+    // We're already in the Ctrl-drag ("move everything below") case here,
+    // so member's own non-member descendants are carried along too.
     dragDescendants.forEach(d=>{
       d.x+=dx;d.y+=dy;
-      if(d.type==='group')moveGroupMembers(d.id,dx,dy,descIdSet);
+      movedIds.add(d.id);
+      if(d.type==='group')moveGroupMembers(d.id,dx,dy,descIdSet,movedIds,dragExtraDescendants,true);
     });
   }
   // Dragging a group node carries all of its contents along with it — direct
   // members, and (recursively) any nested sub-group's own members too —
-  // regardless of the tree-edge-based ctrlDragging above.
+  // regardless of the tree-edge-based ctrlDragging above. A member's own
+  // non-member descendants are additionally carried along only when this is
+  // a Ctrl-drag (or the group is collapsed); a plain drag of the group moves
+  // just the group and its members, leaving a member's own children in place.
   if(dragNode.type==='group'){
-    moveGroupMembers(dragNode.id,dx,dy,descIdSet);
+    moveGroupMembers(dragNode.id,dx,dy,descIdSet,movedIds,dragExtraDescendants,ctrlDragging);
   }
   renderAll();
 }
@@ -1761,9 +1803,26 @@ function onDragUp(){
       const g=findGroupContaining(d.x,d.y,d.id);
       d.groupId=g?g.id:null;
     });
+    // Non-member descendants that were carried along only because their
+    // (non-member) parent is a group member also re-evaluate their own
+    // group membership once the drag ends, exactly like a normally-dragged
+    // node would (and like a group descendant that's itself a group does,
+    // just above).
+    dragExtraDescendants.forEach(d=>{
+      if(d.type==='group'){
+        const ownIds=getAllGroupMemberIds(d.id);
+        ownIds.add(d.id);
+        const outerGroup=findEnclosingGroup(d,ownIds);
+        d.groupId=outerGroup?outerGroup.id:null;
+        regroupNodesForRect(d,outerGroup?outerGroup.id:null);
+        return;
+      }
+      const g=findGroupContaining(d.x,d.y,d.id);
+      d.groupId=g?g.id:null;
+    });
     pushHistory();
   }
-  dragNode=null;dragDescendants=[];
+  dragNode=null;dragDescendants=[];dragExtraDescendants=[];
   document.removeEventListener('mousemove',onDragMove);document.removeEventListener('mouseup',onDragUp);
 }
 
@@ -4657,7 +4716,7 @@ button.active{background:var(--color-background-info);border-color:var(--color-b
 <div id="app">
   <div id="header">
     <h1>🌐 ${escHtmlStr(title)}</h1>
-    <span style="font-size:11px;color:var(--color-text-tertiary)">クリック: 展開/折り畳み | 右クリック: タグ・ステータスを確認 | Ctrl+Shift+右クリック: URLを開く | ホイール: ズーム | ドラッグ: 移動 | WASD: スクロール | Shift+S: スライド幅切替 | N/B: 次/前の接続グループへ | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | Ctrl+Shift+クリック: 同じ内容のノードへジャンプ</span>
+    <span style="font-size:11px;color:var(--color-text-tertiary)">クリック: 展開/折り畳み | 右クリック: タグ・ステータスを確認 | Ctrl+Shift+右クリック: URLを開く | WASD: スクロール | Shift+S: スライド幅切替 | N/B: 次/前の接続グループへ | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | Ctrl+Shift+クリック: 同じ内容のノードへジャンプ</span>
     <button id="btn-theme" style="margin-left:8px;padding:4px 10px"><i id="theme-icon" class="ti ti-moon"></i> <span id="theme-label">ダーク</span></button>
   </div>
   <div id="canvas">
