@@ -62,6 +62,8 @@ html,body{height:100%;background:var(--color-background-secondary);color:var(--c
 #map-title-text{user-select:text}
 #canvas{flex:1;position:relative;overflow:hidden;cursor:grab;user-select:none}
 #canvas.grabbing{cursor:grabbing}
+#canvas.pan-lock .node-el,#canvas.pan-lock .img-node-el,#canvas.pan-lock .group-node-el{cursor:grab}
+#canvas.pan-lock.grabbing .node-el,#canvas.pan-lock.grabbing .img-node-el,#canvas.pan-lock.grabbing .group-node-el{cursor:grabbing}
 #canvas.connecting{cursor:crosshair}
 #canvas.dragover{outline:3px dashed var(--color-text-info);outline-offset:-4px;}
 #svg-layer{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:5}
@@ -248,7 +250,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | WASD: スクロール | Shift+S: スライド幅切替 </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.38</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.39</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -1801,9 +1803,34 @@ function findChildPosition(parent){
 }
 
 // ── Drag nodes ────────────────────────────────────────────
+// ── Pan-lock mode (double-tap Shift) ──────────────────────
+// Pressing Shift twice in a row makes a plain drag pan the canvas even when
+// it starts on top of a node/group — the same behaviour Shift+drag has —
+// until Shift is double-tapped again. Only affects canvas panning: Ctrl
+// combos, clicks, right-clicks etc. behave as usual, and dragging on empty
+// canvas already pans either way.
+let panLock=false;
+function togglePanLock(){
+  panLock=!panLock;
+  canvas.classList.toggle('pan-lock',panLock);
+  showToast(panLock?'🖐 パン固定モード ON（通常ドラッグでもノード上から画面を移動）':'パン固定モード OFF（通常ドラッグに戻しました）');
+}
+let panLockLastShift=0;
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Shift'){panLockLastShift=0;return;}
+  if(e.repeat||e.ctrlKey||e.metaKey||e.altKey)return;
+  const t=e.target,tag=t&&t.tagName;
+  if(tag==='INPUT'||tag==='TEXTAREA'||(t&&t.isContentEditable)||isAnyModalOpen()){panLockLastShift=0;return;}
+  const now=performance.now();
+  if(now-panLockLastShift<400){panLockLastShift=0;togglePanLock();}
+  else panLockLastShift=now;
+},true);
+// A mouse press between two Shift taps (e.g. two quick Shift+drags) must
+// not count as a double-tap.
+document.addEventListener('mousedown',()=>{panLockLastShift=0;},true);
 let dragNode=null,dragOffset={x:0,y:0},didDrag=false,dragDescendants=[],dragExtraDescendants=[];
 function onNodeMouseDown(e,n){
-  if(connecting||e.shiftKey)return;e.stopPropagation();if(e.button!==0)return;
+  if(connecting||e.shiftKey||(panLock&&!e.ctrlKey&&!e.metaKey))return;e.stopPropagation();if(e.button!==0)return;
   dragNode=n;didDrag=false;
   // 折り畳まれたノードは子孫が画面上に見えていないため、Ctrlを押していなくても
   // 子孫ごと連動して移動させる（気づかずに大きくずらしてしまうのを防ぐため）
@@ -2503,8 +2530,9 @@ canvas.addEventListener('mousedown',e=>{
     setTimeout(()=>startInlineEdit(n),0);
     return;
   }
-  if(e.shiftKey&&!e.ctrlKey&&!e.metaKey&&!connecting){
-    // Shift+drag pans the view even when starting on top of a node/group —
+  const onNodeTarget=!!(e.target.closest('.node-el')||e.target.closest('.img-node-el')||e.target.closest('.group-node-el'));
+  if((e.shiftKey||(panLock&&onNodeTarget))&&!e.ctrlKey&&!e.metaKey&&!connecting){
+    // Shift+drag (or any plain drag while pan-lock mode is on) pans the view even when starting on top of a node/group —
     // useful once groups cover most of the canvas and there's little truly
     // empty space left to grab. A plain Shift+click (no real movement)
     // still reaches the node's own click handler afterward (e.g. the
