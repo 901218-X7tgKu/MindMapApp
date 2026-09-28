@@ -250,7 +250,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | WASD: スクロール | Shift+S: スライド幅切替 </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.39</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.40</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -3430,7 +3430,32 @@ function getConnectionGroupReps(excludeGroupMembers=false){
     return x;
   }
   function union(a,b){const ra=find(a),rb=find(b);if(ra!==rb)parent.set(ra,rb);}
-  edges.forEach(e=>{if(parent.has(e.from)&&parent.has(e.to))union(e.from,e.to);});
+  // When excludeGroupMembers is true, a group member itself is absent from
+  // `parent` — but an edge touching one shouldn't just be dropped: it still
+  // connects whatever's on the other end to that member's group. So each
+  // endpoint is resolved up through any group-membership chain (a member of
+  // a member of a nested group, and so on) to the outermost group node
+  // before unioning. This is what makes a group member's own non-member
+  // descendants (or ancestors) count as the same connected group as the
+  // group node itself — exactly as if the edge had gone straight to/from
+  // the group — even though the member in the middle isn't a rep candidate.
+  const byId=new Map(nodes.map(n=>[n.id,n]));
+  function resolveRoot(id){
+    let n=byId.get(id);
+    const seen=new Set();
+    while(n&&n.groupId!=null&&!seen.has(n.id)){
+      seen.add(n.id);
+      const g=byId.get(n.groupId);
+      if(!g)break;
+      n=g;
+    }
+    return n?n.id:id;
+  }
+  edges.forEach(e=>{
+    const ra=excludeGroupMembers?resolveRoot(e.from):e.from;
+    const rb=excludeGroupMembers?resolveRoot(e.to):e.to;
+    if(parent.has(ra)&&parent.has(rb))union(ra,rb);
+  });
   const minIdByRoot=new Map();
   eligible.forEach(n=>{
     const r=find(n.id);
@@ -4607,7 +4632,32 @@ function getConnectionGroupReps(excludeGroupMembers=false){
     return x;
   }
   function union(a,b){const ra=find(a),rb=find(b);if(ra!==rb)parent.set(ra,rb);}
-  edges.forEach(e=>{if(parent.has(e.from)&&parent.has(e.to))union(e.from,e.to);});
+  // When excludeGroupMembers is true, a group member itself is absent from
+  // 'parent' — but an edge touching one shouldn't just be dropped: it still
+  // connects whatever's on the other end to that member's group. So each
+  // endpoint is resolved up through any group-membership chain (a member of
+  // a member of a nested group, and so on) to the outermost group node
+  // before unioning. This is what makes a group member's own non-member
+  // descendants (or ancestors) count as the same connected group as the
+  // group node itself — exactly as if the edge had gone straight to/from
+  // the group — even though the member in the middle isn't a rep candidate.
+  const byId=new Map(nodes.map(n=>[n.id,n]));
+  function resolveRoot(id){
+    let n=byId.get(id);
+    const seen=new Set();
+    while(n&&n.groupId!=null&&!seen.has(n.id)){
+      seen.add(n.id);
+      const g=byId.get(n.groupId);
+      if(!g)break;
+      n=g;
+    }
+    return n?n.id:id;
+  }
+  edges.forEach(e=>{
+    const ra=excludeGroupMembers?resolveRoot(e.from):e.from;
+    const rb=excludeGroupMembers?resolveRoot(e.to):e.to;
+    if(parent.has(ra)&&parent.has(rb))union(ra,rb);
+  });
   const minIdByRoot=new Map();
   eligible.forEach(n=>{
     const r=find(n.id);
