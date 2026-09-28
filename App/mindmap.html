@@ -248,7 +248,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | WASD: スクロール | Shift+S: スライド幅切替 </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.36</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.37</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -423,6 +423,12 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
             </button>
             <button type="button" class="edge-style-opt" data-style="both-dashed-arrow" title="破線＋両矢印">
               <svg width="40" height="14" viewBox="0 0 40 14"><line x1="12" y1="7" x2="28" y2="7" stroke="currentColor" stroke-width="2" stroke-dasharray="5,4"/><path d="M12 3 L4 7 L12 11 Z" fill="currentColor"/><path d="M28 3 L36 7 L28 11 Z" fill="currentColor"/></svg>
+            </button>
+            <button type="button" class="edge-style-opt" data-style="wave" title="波線">
+              <svg width="40" height="14" viewBox="0 0 40 14"><path d="M2 7 Q6 2 10 7 T18 7 T26 7 T34 7" stroke="currentColor" stroke-width="2" fill="none" stroke-linejoin="round"/></svg>
+            </button>
+            <button type="button" class="edge-style-opt" data-style="square" title="矩形波">
+              <svg width="40" height="14" viewBox="0 0 40 14"><path d="M2 7 V2 H8 V12 H14 V2 H20 V12 H26 V2 H32 V12 H38 V7" stroke="currentColor" stroke-width="2" fill="none" stroke-linejoin="round"/></svg>
             </button>
           </div>
         </div>
@@ -660,7 +666,7 @@ function deserialize(text){
       const m=line.match(/^EDGE (\d+) (\d+)(?: (.*))?$/);
       if(m){
         const ed={from:+m[1],to:+m[2]};
-        const STYLE_KEYWORDS=['dashed-arrow','solid','dashed','both-arrow','both-dashed-arrow'];
+        const STYLE_KEYWORDS=['dashed-arrow','solid','dashed','both-arrow','both-dashed-arrow','wave','square'];
         let rest=m[3]||'';
         if(rest){
           const parts=rest.split(' ');
@@ -1361,6 +1367,89 @@ function renderEdges(){
     const mt=1-t;
     return {x:mt*mt*p0.x+2*mt*t*p1.x+t*t*p2.x, y:mt*mt*p0.y+2*mt*t*p1.y+t*t*p2.y};
   }
+  // 'wave' (a smooth sine wobble) and 'square' (a square-wave
+  // wobble) are drawn as a dense polyline that tracks the same underlying
+  // quadratic bezier a plain/dashed edge would use, displaced perpendicular
+  // to the curve's own tangent at each sampled point. The wobble's phase is
+  // driven by cumulative *arc length* (not the raw t parameter), so the
+  // period looks like a consistent pixel size even where the bezier's
+  // speed varies along its length. Amplitude is constant along the whole
+  // edge unless an arrowhead calls for a taper (see taperStart/taperEnd); instead the wavelength is nudged so a
+  // whole number of periods fits, which lands the line exactly on p2 at
+  // phase 0 rather than offset to one side of the node boundary.
+  function buildWobblePath(p0,p1,p2,shape,scl,taperStart,taperEnd){
+    const approxLen=Math.hypot(p1.x-p0.x,p1.y-p0.y)+Math.hypot(p2.x-p1.x,p2.y-p1.y);
+    if(approxLen<1)return 'M'+p0.x+' '+p0.y+' L'+p2.x+' '+p2.y;
+    const wavelength0=14*scl, amplitude=4*scl;
+    const numSamples=Math.max(12, Math.round((approxLen/wavelength0)*10));
+    // Pre-pass: cumulative arc length at each sample, so the wobble can be
+    // stretched to fit a whole number of periods between p0 and p2. That keeps
+    // the line landing exactly on p2 even without any amplitude taper.
+    const pts=[], cum=[0];
+    for(let i=0;i<=numSamples;i++){
+      pts.push(bezierPt(p0,p1,p2,i/numSamples));
+      if(i>0)cum.push(cum[i-1]+Math.hypot(pts[i].x-pts[i-1].x,pts[i].y-pts[i-1].y));
+    }
+    const total=cum[numSamples];
+    const periods=Math.max(1,Math.round(total/wavelength0));
+    const wavelength=total/periods;
+    // Unit normal of the underlying curve at parameter t.
+    function nrmAt(t){
+      const dt=0.001, pf=bezierPt(p0,p1,p2,Math.min(1,t+dt)), pb=bezierPt(p0,p1,p2,Math.max(0,t-dt));
+      let tx=pf.x-pb.x, ty=pf.y-pb.y;
+      const tl=Math.hypot(tx,ty)||1; tx/=tl; ty/=tl;
+      return {nx:-ty, ny:tx};
+    }
+    // Optional amplitude taper: toward the end only (single arrow — keeps
+    // the arrowhead's direction clean), or toward both ends. With no taper
+    // the amplitude stays constant.
+    function envAt(t){
+      if(taperStart&&taperEnd)return Math.sin(Math.PI*t);
+      if(taperEnd)return Math.cos(Math.PI*t/2);
+      if(taperStart)return Math.sin(Math.PI*t/2);
+      return 1;
+    }
+    let d='';
+    function add(x,y){d+=(d===''?'M':' L')+x+' '+y;}
+    if(shape==='square'){
+      // Square wave: the line steps out from the center line to +amplitude,
+      // then alternates -/+ every half period with true vertical steps
+      // (extra points are inserted exactly at each boundary rather than
+      // relying on sample spacing), and steps back to the center line at p2.
+      const half=wavelength/2, last=periods*2-1;
+      const n0=nrmAt(0), e0=envAt(0);
+      add(p0.x,p0.y);
+      add(pts[0].x+n0.nx*amplitude*e0, pts[0].y+n0.ny*amplitude*e0);
+      let prevK=0;
+      for(let i=1;i<=numSamples;i++){
+        const k=Math.min(Math.floor(cum[i]/half+1e-9),last);
+        for(let b=prevK+1;b<=k;b++){
+          const f=(b*half-cum[i-1])/((cum[i]-cum[i-1])||1);
+          const t=(i-1+f)/numSamples;
+          const bp=bezierPt(p0,p1,p2,t), nn=nrmAt(t), ee=envAt(t);
+          const vOld=((b-1)%2===0)?1:-1;
+          add(bp.x+nn.nx*amplitude*ee*vOld, bp.y+nn.ny*amplitude*ee*vOld);
+          add(bp.x-nn.nx*amplitude*ee*vOld, bp.y-nn.ny*amplitude*ee*vOld);
+        }
+        prevK=k;
+        const v=(k%2===0)?1:-1, nn=nrmAt(i/numSamples), ee=envAt(i/numSamples);
+        add(pts[i].x+nn.nx*amplitude*ee*v, pts[i].y+nn.ny*amplitude*ee*v);
+      }
+      add(p2.x,p2.y);
+      return d;
+    }
+    for(let i=0;i<=numSamples;i++){
+      const t=i/numSamples, nn=nrmAt(t);
+      const offset=Math.sin((2*Math.PI*cum[i])/wavelength)*amplitude*envAt(t);
+      add(pts[i].x+nn.nx*offset, pts[i].y+nn.ny*offset);
+    }
+    return d;
+  }
+  function edgeLineShape(style){
+    if(style.indexOf('wave')!==-1)return 'wave';
+    if(style.indexOf('square')!==-1)return 'square';
+    return 'straight';
+  }
   // Trims the START of the classic quadratic curve (p0=raw source center,
   // p1=classic control point, p2=clipped destination) so the drawn path
   // never passes through the source's own (rounded) rect — using De
@@ -1467,7 +1556,9 @@ function renderEdges(){
       const clipped=clipCurveStart(p0,p1,p2,srect);
       p0=clipped.p0; p1=clipped.p1;
     }
-    const dAttr=`M${p0.x} ${p0.y} Q${p1.x} ${p1.y} ${p2.x} ${p2.y}`;
+    const dAttr=edgeLineShape(style)==='straight'
+      ? `M${p0.x} ${p0.y} Q${p1.x} ${p1.y} ${p2.x} ${p2.y}`
+      : buildWobblePath(p0,p1,p2,edgeLineShape(style),scale,false,hasArrow);
     const path=document.createElementNS('http://www.w3.org/2000/svg','path');
     path.setAttribute('d',dAttr);
     path.setAttribute('fill','none');
@@ -3695,7 +3786,7 @@ function deserialize(text){
       const m=line.match(/^EDGE (\\d+) (\\d+)(?: (.*))?$/);
       if(m){
         const ed={from:+m[1],to:+m[2]};
-        const STYLE_KEYWORDS=['dashed-arrow','solid','dashed','both-arrow','both-dashed-arrow'];
+        const STYLE_KEYWORDS=['dashed-arrow','solid','dashed','both-arrow','both-dashed-arrow','wave','square'];
         let rest=m[3]||'';
         if(rest){
           const parts=rest.split(' ');
@@ -4016,6 +4107,79 @@ function renderEdges(){
     const mt=1-t;
     return {x:mt*mt*p0.x+2*mt*t*p1.x+t*t*p2.x, y:mt*mt*p0.y+2*mt*t*p1.y+t*t*p2.y};
   }
+  function buildWobblePath(p0,p1,p2,shape,scl,taperStart,taperEnd){
+    const approxLen=Math.hypot(p1.x-p0.x,p1.y-p0.y)+Math.hypot(p2.x-p1.x,p2.y-p1.y);
+    if(approxLen<1)return 'M'+p0.x+' '+p0.y+' L'+p2.x+' '+p2.y;
+    const wavelength0=14*scl, amplitude=4*scl;
+    const numSamples=Math.max(12, Math.round((approxLen/wavelength0)*10));
+    // Pre-pass: cumulative arc length at each sample, so the wobble can be
+    // stretched to fit a whole number of periods between p0 and p2. That keeps
+    // the line landing exactly on p2 even without any amplitude taper.
+    const pts=[], cum=[0];
+    for(let i=0;i<=numSamples;i++){
+      pts.push(bezierPt(p0,p1,p2,i/numSamples));
+      if(i>0)cum.push(cum[i-1]+Math.hypot(pts[i].x-pts[i-1].x,pts[i].y-pts[i-1].y));
+    }
+    const total=cum[numSamples];
+    const periods=Math.max(1,Math.round(total/wavelength0));
+    const wavelength=total/periods;
+    // Unit normal of the underlying curve at parameter t.
+    function nrmAt(t){
+      const dt=0.001, pf=bezierPt(p0,p1,p2,Math.min(1,t+dt)), pb=bezierPt(p0,p1,p2,Math.max(0,t-dt));
+      let tx=pf.x-pb.x, ty=pf.y-pb.y;
+      const tl=Math.hypot(tx,ty)||1; tx/=tl; ty/=tl;
+      return {nx:-ty, ny:tx};
+    }
+    // Optional amplitude taper: toward the end only (single arrow — keeps
+    // the arrowhead's direction clean), or toward both ends. With no taper
+    // the amplitude stays constant.
+    function envAt(t){
+      if(taperStart&&taperEnd)return Math.sin(Math.PI*t);
+      if(taperEnd)return Math.cos(Math.PI*t/2);
+      if(taperStart)return Math.sin(Math.PI*t/2);
+      return 1;
+    }
+    let d='';
+    function add(x,y){d+=(d===''?'M':' L')+x+' '+y;}
+    if(shape==='square'){
+      // Square wave: the line steps out from the center line to +amplitude,
+      // then alternates -/+ every half period with true vertical steps
+      // (extra points are inserted exactly at each boundary rather than
+      // relying on sample spacing), and steps back to the center line at p2.
+      const half=wavelength/2, last=periods*2-1;
+      const n0=nrmAt(0), e0=envAt(0);
+      add(p0.x,p0.y);
+      add(pts[0].x+n0.nx*amplitude*e0, pts[0].y+n0.ny*amplitude*e0);
+      let prevK=0;
+      for(let i=1;i<=numSamples;i++){
+        const k=Math.min(Math.floor(cum[i]/half+1e-9),last);
+        for(let b=prevK+1;b<=k;b++){
+          const f=(b*half-cum[i-1])/((cum[i]-cum[i-1])||1);
+          const t=(i-1+f)/numSamples;
+          const bp=bezierPt(p0,p1,p2,t), nn=nrmAt(t), ee=envAt(t);
+          const vOld=((b-1)%2===0)?1:-1;
+          add(bp.x+nn.nx*amplitude*ee*vOld, bp.y+nn.ny*amplitude*ee*vOld);
+          add(bp.x-nn.nx*amplitude*ee*vOld, bp.y-nn.ny*amplitude*ee*vOld);
+        }
+        prevK=k;
+        const v=(k%2===0)?1:-1, nn=nrmAt(i/numSamples), ee=envAt(i/numSamples);
+        add(pts[i].x+nn.nx*amplitude*ee*v, pts[i].y+nn.ny*amplitude*ee*v);
+      }
+      add(p2.x,p2.y);
+      return d;
+    }
+    for(let i=0;i<=numSamples;i++){
+      const t=i/numSamples, nn=nrmAt(t);
+      const offset=Math.sin((2*Math.PI*cum[i])/wavelength)*amplitude*envAt(t);
+      add(pts[i].x+nn.nx*offset, pts[i].y+nn.ny*offset);
+    }
+    return d;
+  }
+  function edgeLineShape(style){
+    if(style.indexOf('wave')!==-1)return 'wave';
+    if(style.indexOf('square')!==-1)return 'square';
+    return 'straight';
+  }
   function clipCurveStart(p0,p1,p2,rect){
     if(!rect||!ptInRoundedRect(p0.x,p0.y,rect))return {p0:p0,p1:p1};
     const STEPS=48;
@@ -4078,7 +4242,10 @@ function renderEdges(){
       p0=clipped.p0; p1=clipped.p1;
     }
     const path=document.createElementNS('http://www.w3.org/2000/svg','path');
-    path.setAttribute('d','M'+p0.x+' '+p0.y+' Q'+p1.x+' '+p1.y+' '+p2.x+' '+p2.y);
+    const dAttr=edgeLineShape(style)==='straight'
+      ? ('M'+p0.x+' '+p0.y+' Q'+p1.x+' '+p1.y+' '+p2.x+' '+p2.y)
+      : buildWobblePath(p0,p1,p2,edgeLineShape(style),scale,false,hasArrow);
+    path.setAttribute('d',dAttr);
     path.setAttribute('fill','none');path.setAttribute('stroke','var(--color-edge)');
     path.setAttribute('stroke-width',String(strokeW));path.setAttribute('class','edge');
     if(dashArr)path.setAttribute('stroke-dasharray',dashArr);
