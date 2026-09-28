@@ -248,7 +248,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | WASD: スクロール | Shift+S: スライド幅切替 </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.37</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.38</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -434,6 +434,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
         </div>
         <input id="edge-modal-input" class="edge-label-input" type="text" placeholder="接続線に添えるコメント（短文）" maxlength="60" autocomplete="off">
         <div class="modal-actions">
+          <button id="edge-modal-delete" class="danger" style="margin-right:auto"><i class="ti ti-trash"></i> エッジの削除</button>
           <button id="edge-modal-save"><i class="ti ti-check"></i> 保存</button>
           <button id="edge-modal-clear">クリア</button>
           <button id="edge-modal-cancel">キャンセル</button>
@@ -2417,8 +2418,19 @@ function setPendingEdgeStyle(style){
   edgeStyleButtons.forEach(b=>b.classList.toggle('active',b.dataset.style===style));
 }
 edgeStyleButtons.forEach(b=>b.addEventListener('click',()=>setPendingEdgeStyle(b.dataset.style)));
+// Removes a single edge (the connection only — both nodes stay). Undoable
+// like any other edit.
+function deleteEdge(ed){
+  const idx=edges.indexOf(ed);
+  if(idx<0)return;
+  edges.splice(idx,1);
+  pushHistory();renderAll();
+  showToast('接続を削除しました');
+}
 function onEdgeRightClick(e,ed){
   e.preventDefault();e.stopPropagation();
+  // Shift+right-click on an edge deletes it right away, skipping the modal.
+  if(e.shiftKey){deleteEdge(ed);return;}
   openEdgeModal(ed);
 }
 function openEdgeModal(ed){
@@ -2442,6 +2454,11 @@ document.getElementById('edge-modal-save').addEventListener('click',saveEdgeModa
 document.getElementById('edge-modal-clear').addEventListener('click',()=>{
   edgeModalInput.value='';
   saveEdgeModal();
+});
+document.getElementById('edge-modal-delete').addEventListener('click',()=>{
+  const ed=editingEdge;
+  closeOverlay(edgeModal);
+  if(ed)deleteEdge(ed);
 });
 document.getElementById('edge-modal-cancel').addEventListener('click',()=>closeOverlay(edgeModal));
 edgeModal.addEventListener('click',e=>{if(e.target===edgeModal)closeOverlay(edgeModal);});
