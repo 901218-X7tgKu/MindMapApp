@@ -250,7 +250,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | WASD: スクロール | Shift+S: スライド幅切替 </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.42</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.44</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -521,7 +521,7 @@ let nodes=[], edges=[], selected=null;
 let connecting=false, connectFrom=null;       // toolbar connect mode (kept for btn-connect)
 let _dupJumpContent=null, _dupJumpIdx=0;      // Ctrl+Shift+click: cycle through nodes with same content
 let ctrlConnectPending=null;                  // ctrl+right-click connect
-let panX=0, panY=0, isPanning=false, panStart={x:0,y:0};
+let panX=0, panY=0, isPanning=false, didPan=false, panStart={x:0,y:0};
 let scale=1;                                  // zoom
 let wasdStepRatio=0.5;                        // WASDパン時のスライド幅（表示領域比率）。Shift+Sで50%→25%→12.5%を循環
 let collapsedNodes=new Set();                 // ids of collapsed parents
@@ -723,6 +723,7 @@ function getAllDescendants(nodeId,result=new Set()){
   }
   return result;
 }
+let _visMemo=null;
 function isNodeVisible(nodeId,memo){
   // A node is hidden if any of its tree-edge ancestors is hidden — either
   // directly collapsed, or itself hidden for some other reason (recursing
@@ -746,7 +747,7 @@ function isNodeVisible(nodeId,memo){
   // the cycle guard: a node is marked visible *before* recursing into its
   // own ancestors, so if a cycle were ever encountered the in-progress node
   // resolves to "visible" rather than looping forever.
-  if(!memo)memo=new Map();
+  if(!memo)memo=_visMemo||(_visMemo=new Map());
   if(memo.has(nodeId))return memo.get(nodeId);
   memo.set(nodeId,true);
   let visible=true;
@@ -1016,7 +1017,7 @@ function onGroupResizeMove(e){
   resizingGroup.height=newH;
   resizingGroup.x=resizeStart.x+usedDx/2;
   resizingGroup.y=resizeStart.y+usedDy/2;
-  renderAll();
+  scheduleRenderAll();
 }
 // Re-evaluates group membership for every node against group g's current
 // rectangle: nodes now inside join, members now outside are released.
@@ -1070,6 +1071,7 @@ function onGroupResizeUp(){
   resizingGroup=null;resizeCorner=null;
   document.removeEventListener('mousemove',onGroupResizeMove);
   document.removeEventListener('mouseup',onGroupResizeUp);
+  renderAll();
 }
 function isPointInGroupRect(x,y,g){
   const w=g.width||320,h=g.height||220;
@@ -1304,7 +1306,33 @@ function formatNodeText(raw){
 
 function renderNode(n){if(n.type==='image')renderImgNode(n);else if(n.type==='group')renderGroupNode(n);else renderTextNode(n);}
 function createNodeElByType(n){if(n.type==='image')createImgNodeEl(n);else if(n.type==='group')createGroupNodeEl(n);else createNodeEl(n);}
-function renderAll(){nodes.forEach(renderNode);renderEdges();applyHoverHighlight();updateZoomDisplay();}
+function renderAll(){
+  // isNodeVisible normally memoizes only within its own recursive call, but
+  // renderNode/renderEdges each call it fresh per node/edge — so across one
+  // full render pass the same ancestor chain gets recomputed from scratch
+  // dozens or hundreds of times over on a large map. Sharing one memo for
+  // the whole pass (cleared again right after) cuts that down to one
+  // computation per node, with no change in the result: nothing mutates
+  // nodes/edges/collapsedNodes mid-render (this is synchronous, single-
+  // threaded JS), so the cache can never go stale during the pass.
+  _visMemo=new Map();
+  nodes.forEach(renderNode);renderEdges();applyHoverHighlight();updateZoomDisplay();
+  _visMemo=null;
+}
+// Coalesces renderAll() calls that fire many times per mouse-move burst
+// (dragging a node, panning the canvas, resizing a group) down to at most
+// one per animation frame. The mousemove handlers below keep updating the
+// live x/y/pan values on every event as before — only the (expensive, full)
+// redraw is deferred and deduplicated, so what actually reaches the screen
+// is unchanged, just drawn once per frame instead of once per pixel of
+// mouse movement. mouseup handlers still call renderAll() directly, so the
+// final position is always drawn immediately with no extra delay.
+let _renderAllScheduled=false;
+function scheduleRenderAll(){
+  if(_renderAllScheduled)return;
+  _renderAllScheduled=true;
+  requestAnimationFrame(()=>{_renderAllScheduled=false;renderAll();});
+}
 function updateZoomDisplay(){
   const el=document.getElementById('zoom-level');
   if(el&&document.activeElement!==el)el.value=Math.round(scale*100)+'%';
@@ -1900,7 +1928,7 @@ function onDragMove(e){
   if(dragNode.type==='group'){
     moveGroupMembers(dragNode.id,dx,dy,descIdSet,movedIds,dragExtraDescendants,ctrlDragging);
   }
-  renderAll();
+  scheduleRenderAll();
 }
 function onDragUp(){
   if(dragNode&&didDrag){
@@ -1961,6 +1989,22 @@ function onDragUp(){
       d.groupId=g?g.id:null;
     });
     pushHistory();
+    // The drag's own moves were drawn via the coalesced scheduleRenderAll(),
+    // which only guarantees a redraw within the next animation frame — fine
+    // while the mouse keeps moving, but the drop itself (including the
+    // group-membership reassignment just above) should be reflected the
+    // instant the mouse is released, not after an extra, perceptible-on-a-
+    // slow-frame delay. Only reached when a real drag happened (didDrag) —
+    // calling this unconditionally on every mouseup, including a plain
+    // click with no movement, was the bug: rebuilding node/edge DOM here
+    // runs synchronously inside the mouseup handler, before the browser's
+    // own follow-up 'click' event is dispatched, and if that rebuild
+    // touches the element the click was headed for, the browser drops the
+    // click entirely — silently breaking every modifier-click action
+    // (Shift+click recolor, Ctrl+click connect, Ctrl+Shift+click jump, and
+    // plain click/double-click) since they all run from onNodeClick's
+    // 'click' listener.
+    renderAll();
   }
   dragNode=null;dragDescendants=[];dragExtraDescendants=[];
   document.removeEventListener('mousemove',onDragMove);document.removeEventListener('mouseup',onDragUp);
@@ -2559,20 +2603,38 @@ canvas.addEventListener('mousedown',e=>{
     // still reaches the node's own click handler afterward (e.g. the
     // color-cycle shortcut), since this only tracks movement and never
     // calls preventDefault/stopPropagation.
-    isPanning=true;canvas.classList.add('grabbing');
+    isPanning=true;didPan=false;canvas.classList.add('grabbing');
     panStart={x:e.clientX-panX,y:e.clientY-panY};
     return;
   }
   if(!connecting&&onEmptyCanvas){
-    selected=null;isPanning=true;canvas.classList.add('grabbing');
+    selected=null;isPanning=true;didPan=false;canvas.classList.add('grabbing');
     panStart={x:e.clientX-panX,y:e.clientY-panY};renderAll();
   }
 });
 canvas.addEventListener('mousemove',e=>{
-  if(isPanning){panX=e.clientX-panStart.x;panY=e.clientY-panStart.y;renderAll();}
+  if(isPanning){panX=e.clientX-panStart.x;panY=e.clientY-panStart.y;didPan=true;scheduleRenderAll();}
 });
 canvas.addEventListener('mouseup',e=>{
+  // Guard on isPanning itself, not just didPan: this listener is on canvas,
+  // so it also fires for the mouseup of a plain/Ctrl+click on a node whose
+  // own mousedown never touched canvas at all (e.g. Ctrl+click's handler
+  // calls stopPropagation) — that mouseup still bubbles up here since
+  // nothing stops *it*. Without this guard, isPanning/didPan would be left
+  // over from whatever pan last happened (real or not) and this branch
+  // would fire again for that unrelated click, rebuilding node/edge DOM
+  // synchronously before the browser's own follow-up 'click' event is
+  // dispatched — which silently drops that click. Guarding on isPanning
+  // (true only between a pan's own mousedown and its own mouseup) makes
+  // this a no-op for every click that didn't actually start a pan here.
+  if(!isPanning)return;
   isPanning=false;canvas.classList.remove('grabbing');
+  // Only when actual panning motion happened (didPan) — the coalesced
+  // scheduleRenderAll() above only guarantees a redraw within the next
+  // animation frame, so this guarantees the final pan position is drawn the
+  // instant the mouse is released rather than after an extra, perceptible-
+  // on-a-slow-frame delay.
+  if(didPan)renderAll();
 });
 
 // Wheel zoom (zoom toward cursor)
@@ -3942,8 +4004,9 @@ function toggleNodeCollapse(n){
   }
   renderAll();
 }
+let _visMemo=null;
 function isVisible(id,memo){
-  if(!memo)memo=new Map();
+  if(!memo)memo=_visMemo||(_visMemo=new Map());
   if(memo.has(id))return memo.get(id);
   memo.set(id,true);
   let visible=true;
@@ -4033,6 +4096,11 @@ document.getElementById('attr-modal').addEventListener('click',e=>{if(e.target.i
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeAttrModal();});
 
 function renderAll(){
+  // See the editor's renderAll for why: sharing one visibility memo across
+  // the whole pass avoids recomputing the same ancestor chain from scratch
+  // for every node/edge, with no change in the result (synchronous, single-
+  // threaded — nothing can mutate state mid-pass).
+  _visMemo=new Map();
   nodes.forEach(n=>{
     let el=document.getElementById('node-'+n.id);
     if(!el){
@@ -4125,6 +4193,13 @@ function renderAll(){
     }
   });
   renderEdges();applyHoverHighlight();updateZoomDisplay();
+  _visMemo=null;
+}
+let _renderAllScheduled=false;
+function scheduleRenderAll(){
+  if(_renderAllScheduled)return;
+  _renderAllScheduled=true;
+  requestAnimationFrame(()=>{_renderAllScheduled=false;renderAll();});
 }
 function updateZoomDisplay(){
   const el=document.getElementById('zoom-level');
@@ -4422,6 +4497,7 @@ function renderEdges(){
   });
 }
 
+let didPan=false;
 canvas.addEventListener('mousedown',e=>{
   if(e.button!==0)return;
   // Plain left-drag pans the view unconditionally, even when starting on
@@ -4429,11 +4505,23 @@ canvas.addEventListener('mousedown',e=>{
   // double-click (expand/collapse), right-click (attributes), and
   // Ctrl+Shift+click (jump to duplicate / open URL), none of which a
   // single mousedown-and-drag should interfere with.
-  isPanning=true;canvas.classList.add('grabbing');
+  isPanning=true;didPan=false;canvas.classList.add('grabbing');
   panStart={x:e.clientX-panX,y:e.clientY-panY};
 });
-canvas.addEventListener('mousemove',e=>{if(isPanning){panX=e.clientX-panStart.x;panY=e.clientY-panStart.y;renderAll();}});
-canvas.addEventListener('mouseup',()=>{isPanning=false;canvas.classList.remove('grabbing');});
+canvas.addEventListener('mousemove',e=>{if(isPanning){panX=e.clientX-panStart.x;panY=e.clientY-panStart.y;didPan=true;scheduleRenderAll();}});
+canvas.addEventListener('mouseup',()=>{
+  if(!isPanning)return;
+  isPanning=false;canvas.classList.remove('grabbing');
+  // Only when actual panning motion happened (didPan) — see the editor's
+  // identical guard for why: calling this unconditionally on every mouseup,
+  // including a plain click on a node with no movement (every node
+  // mousedown bubbles here, per the comment above), rebuilds node/edge DOM
+  // synchronously before the browser's own follow-up 'click' event is
+  // dispatched, and the browser drops that click entirely when its target
+  // gets touched by the rebuild — silently breaking double-click
+  // (expand/collapse) and Ctrl+Shift+click (jump to duplicate / open URL).
+  if(didPan)renderAll();
+});
 function isAnyModalOpen(){
   return ['attr-modal','tag-status-overlay'].some(id=>{
     const el=document.getElementById(id);
