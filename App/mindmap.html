@@ -250,7 +250,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | WASD: スクロール | Shift+S: スライド幅切替 </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.41</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.42</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -723,38 +723,51 @@ function getAllDescendants(nodeId,result=new Set()){
   }
   return result;
 }
-function isNodeVisible(nodeId){
+function isNodeVisible(nodeId,memo){
   // A node is hidden if any of its tree-edge ancestors is hidden — either
   // directly collapsed, or itself hidden for some other reason (recursing
-  // into isNodeVisible below). That "some other reason" is what makes a
-  // group member's own non-member descendant fold away too: the member
-  // itself has no incoming tree edge (group membership isn't a tree edge),
-  // so collapsing an ancestor of the *group* only makes the member invisible
-  // via the group-membership check further down — but once that member is
+  // below). That "some other reason" is what makes a group member's own
+  // non-member descendant fold away too: the member itself has no incoming
+  // tree edge (group membership isn't a tree edge), so collapsing an
+  // ancestor of the *group* only makes the member invisible via the
+  // group-membership check further down — but once that member is
   // invisible, this recursive check catches its descendant here, even
   // though the descendant was never a member of the group at all.
-  function hasCollapsedAncestor(id, visited){
-    for(const e of edges){
-      if(e.to===id){
-        const pid=e.from;
-        if(visited.has(pid))continue;
-        visited.add(pid);
-        if(collapsedNodes.has(pid)||!isNodeVisible(pid))return true;
-        if(hasCollapsedAncestor(pid,visited))return true;
-      }
+  //
+  // `memo` caches every node's result for the current top-level call (a
+  // fresh Map is created below when a caller doesn't pass one in). Without
+  // it, this recursion re-walks the same ancestors again for every node
+  // that shares them — harmless for a plain tree, but this app's edges form
+  // a general graph (branch nodes and multi-parent "diamond" convergences
+  // are a supported, ordinary shape), and re-walking a shared ancestor from
+  // scratch at every convergence point multiplies out combinatorially with
+  // each additional layer. A memoized single pass keeps this linear in the
+  // graph's size no matter how many paths converge. `memo` also doubles as
+  // the cycle guard: a node is marked visible *before* recursing into its
+  // own ancestors, so if a cycle were ever encountered the in-progress node
+  // resolves to "visible" rather than looping forever.
+  if(!memo)memo=new Map();
+  if(memo.has(nodeId))return memo.get(nodeId);
+  memo.set(nodeId,true);
+  let visible=true;
+  for(const e of edges){
+    if(e.to===nodeId){
+      const pid=e.from;
+      if(collapsedNodes.has(pid)||!isNodeVisible(pid,memo)){visible=false;break;}
     }
-    return false;
   }
-  if(hasCollapsedAncestor(nodeId,new Set()))return false;
-  // A node inside a group is also hidden whenever the group itself is
-  // hidden (e.g. the group is a collapsed-away tree child) — the group's
-  // members shouldn't keep floating on screen once their container
-  // disappears. This recurses naturally through nested groups too (a group
-  // can itself be another group's member); the app never lets a containment
-  // cycle form, so the recursion always terminates.
-  const n=nodes.find(nd=>nd.id===nodeId);
-  if(n&&n.groupId&&!isNodeVisible(n.groupId))return false;
-  return true;
+  if(visible){
+    // A node inside a group is also hidden whenever the group itself is
+    // hidden (e.g. the group is a collapsed-away tree child) — the group's
+    // members shouldn't keep floating on screen once their container
+    // disappears. This recurses naturally through nested groups too (a
+    // group can itself be another group's member); the app never lets a
+    // containment cycle form, so the recursion always terminates.
+    const n=nodes.find(nd=>nd.id===nodeId);
+    if(n&&n.groupId&&!isNodeVisible(n.groupId,memo))visible=false;
+  }
+  memo.set(nodeId,visible);
+  return visible;
 }
 function toggleCollapse(n){
   if(!hasChildren(n.id))return;
@@ -3929,21 +3942,23 @@ function toggleNodeCollapse(n){
   }
   renderAll();
 }
-function hasCollapsedAncestor(id,visited){
+function isVisible(id,memo){
+  if(!memo)memo=new Map();
+  if(memo.has(id))return memo.get(id);
+  memo.set(id,true);
+  let visible=true;
   for(const e of edges){
     if(e.to===id){
-      const pid=e.from;if(visited.has(pid))continue;visited.add(pid);
-      if(collapsed.has(pid)||!isVisible(pid))return true;
-      if(hasCollapsedAncestor(pid,visited))return true;
+      const pid=e.from;
+      if(collapsed.has(pid)||!isVisible(pid,memo)){visible=false;break;}
     }
   }
-  return false;
-}
-function isVisible(id){
-  if(hasCollapsedAncestor(id,new Set()))return false;
-  const n=nodes.find(nd=>nd.id===id);
-  if(n&&n.groupId&&!isVisible(n.groupId))return false;
-  return true;
+  if(visible){
+    const n=nodes.find(nd=>nd.id===id);
+    if(n&&n.groupId&&!isVisible(n.groupId,memo))visible=false;
+  }
+  memo.set(id,visible);
+  return visible;
 }
 function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 ${parseFmtSegments.toString()}
