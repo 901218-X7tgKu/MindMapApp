@@ -250,7 +250,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | WASD: スクロール | Shift+S: スライド幅切替 </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.44</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.45</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -3181,8 +3181,12 @@ document.addEventListener('keydown',e=>{
     if(selected===null)return;
     const src=nodes.find(n=>n.id===selected);
     if(!src)return;
-    const idSet=new Set(getAllDescendantIds(src.id));
-    idSet.add(src.id);
+    // Closed over group membership too (see getDeletionSetWithGroupMembers):
+    // if a group node is swept up in the subtree, its members — and their
+    // own descendants, even ones that aren't themselves group members —
+    // come along with it, rather than being left behind as orphaned
+    // references to a group that no longer exists once pasted elsewhere.
+    const idSet=getDeletionSetWithGroupMembers(src.id);
     const treeNodes=nodes.filter(n=>idSet.has(n.id)).map(n=>JSON.parse(JSON.stringify(n)));
     const treeEdges=edges.filter(ed=>idSet.has(ed.from)&&idSet.has(ed.to)).map(ed=>JSON.parse(JSON.stringify(ed)));
     copiedTree={rootId:src.id,nodes:treeNodes,edges:treeEdges};
@@ -3209,13 +3213,14 @@ document.addEventListener('keydown',e=>{
     const src=nodes.find(n=>n.id===selected);
     if(!src)return;
     e.preventDefault();
-    const idSet=new Set(getAllDescendantIds(src.id));
-    idSet.add(src.id);
+    // Same group-membership closure as Shift+C above, so what gets copied
+    // to the clipboard and what actually gets deleted always match exactly.
+    const idSet=getDeletionSetWithGroupMembers(src.id);
     const treeNodes=nodes.filter(n=>idSet.has(n.id)).map(n=>JSON.parse(JSON.stringify(n)));
     const treeEdges=edges.filter(ed=>idSet.has(ed.from)&&idSet.has(ed.to)).map(ed=>JSON.parse(JSON.stringify(ed)));
     copiedTree={rootId:src.id,nodes:treeNodes,edges:treeEdges};
     copiedNode=null; // a tree copy supersedes any previously copied single node
-    deleteNodeWithDescendants(src);
+    deleteNodeWithDescendantsAndGroupMembers(src);
     showToast(`✂ ノードツリーを切り取りました（${treeNodes.length}個）`);
   }
 
@@ -3619,17 +3624,36 @@ function getDupJumpContent(n){
 function jumpToDuplicateNode(n){
   const content=getDupJumpContent(n);
   if(!content){showToast('⚠ ノードの内容が空です');return;}
-  const group=nodes.filter(nd=>nd.id!==n.id && getDupJumpContent(nd)===content);
-  if(group.length===0){showToast('⚠ 同じ内容の他のノードはありません');return;}
+  // Cycling used to track a position inside "every node but the one I just
+  // clicked" — a group whose members shift depending on which node that
+  // was. With 3+ duplicates, re-clicking whichever node you just landed on
+  // (the natural way to keep cycling) fed that same idx into a *different*
+  // exclusion-group each time, and the position could land back on a node
+  // already seen while never reaching another — one duplicate would drop
+  // out of rotation for good. Tracking the position in one fixed, stable
+  // list of every node sharing this content (sorted by id so "index 2"
+  // always means the same node regardless of who was clicked) fixes that:
+  // every click simply advances one step through that same list, skipping
+  // over the node just clicked on if the step would otherwise land back on
+  // it, so a full lap always visits every other duplicate exactly once.
+  const fullGroup=nodes.filter(nd=>getDupJumpContent(nd)===content).sort((a,b)=>a.id-b.id);
+  if(fullGroup.length<2){showToast('⚠ 同じ内容の他のノードはありません');return;}
+  let idx;
   if(_dupJumpContent===content){
-    _dupJumpIdx=(_dupJumpIdx+1)%group.length;
+    idx=(_dupJumpIdx+1)%fullGroup.length;
   } else {
-    _dupJumpContent=content;
-    _dupJumpIdx=0;
+    // Starting a fresh cycle: begin right after n's own place in the list,
+    // so the very first jump goes to a genuinely different node next in
+    // canonical order rather than always restarting at the lowest id.
+    idx=(fullGroup.findIndex(nd=>nd.id===n.id)+1)%fullGroup.length;
   }
-  const target=group[_dupJumpIdx];
+  if(fullGroup[idx].id===n.id)idx=(idx+1)%fullGroup.length;
+  _dupJumpContent=content;_dupJumpIdx=idx;
+  const target=fullGroup[idx];
   centerOnNode(target.id);
-  showToast(group.length>1?`🔎 同じ内容のノードへジャンプ (${_dupJumpIdx+1}/${group.length})`:'🔎 同じ内容のノードへジャンプしました');
+  const others=fullGroup.filter(nd=>nd.id!==n.id);
+  const pos=others.findIndex(nd=>nd.id===target.id);
+  showToast(others.length>1?`🔎 同じ内容のノードへジャンプ (${pos+1}/${others.length})`:'🔎 同じ内容のノードへジャンプしました');
 }
 
 document.getElementById('search-input').addEventListener('input',function(){
@@ -4818,17 +4842,21 @@ function getDupJumpContent(n){
 function jumpToDuplicateNode(n){
   const content=getDupJumpContent(n);
   if(!content){showToast('⚠ ノードの内容が空です');return;}
-  const group=nodes.filter(nd=>nd.id!==n.id && getDupJumpContent(nd)===content);
-  if(group.length===0){showToast('⚠ 同じ内容の他のノードはありません');return;}
+  const fullGroup=nodes.filter(nd=>getDupJumpContent(nd)===content).sort((a,b)=>a.id-b.id);
+  if(fullGroup.length<2){showToast('⚠ 同じ内容の他のノードはありません');return;}
+  let idx;
   if(_dupJumpContent===content){
-    _dupJumpIdx=(_dupJumpIdx+1)%group.length;
+    idx=(_dupJumpIdx+1)%fullGroup.length;
   } else {
-    _dupJumpContent=content;
-    _dupJumpIdx=0;
+    idx=(fullGroup.findIndex(nd=>nd.id===n.id)+1)%fullGroup.length;
   }
-  const target=group[_dupJumpIdx];
+  if(fullGroup[idx].id===n.id)idx=(idx+1)%fullGroup.length;
+  _dupJumpContent=content;_dupJumpIdx=idx;
+  const target=fullGroup[idx];
   centerOn(target.id);
-  showToast(group.length>1?('🔎 同じ内容のノードへジャンプ ('+(_dupJumpIdx+1)+'/'+group.length+')'):'🔎 同じ内容のノードへジャンプしました');
+  const others=fullGroup.filter(nd=>nd.id!==n.id);
+  const pos=others.findIndex(nd=>nd.id===target.id);
+  showToast(others.length>1?('🔎 同じ内容のノードへジャンプ ('+(pos+1)+'/'+others.length+')'):'🔎 同じ内容のノードへジャンプしました');
 }
 document.getElementById('search-input').addEventListener('input',function(){
   const q=this.value.trim();
