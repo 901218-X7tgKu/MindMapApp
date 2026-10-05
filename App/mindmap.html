@@ -250,7 +250,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | WASD: スクロール | Shift+S: スライド幅切替 </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.46</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.47</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -1639,6 +1639,7 @@ function renderEdges(){
     hit.dataset.from=String(e.from);
     hit.dataset.to=String(e.to);
     hit.addEventListener('contextmenu',evt=>onEdgeRightClick(evt,e));
+    hit.addEventListener('click',evt=>onEdgeClick(evt,e));
     svgEl.appendChild(hit);
     // mx is the *classic* (raw-center-based) midpoint, not the post-trim
     // control point, so label placement keeps working the way it always has
@@ -1700,6 +1701,7 @@ function renderEdges(){
     text.dataset.to=String(e.to);
     text.textContent=e.label;
     text.addEventListener('contextmenu',evt=>onEdgeRightClick(evt,e));
+    text.addEventListener('click',evt=>onEdgeClick(evt,e));
     svgEl.appendChild(text);
   }
   edges.forEach(e=>{
@@ -2524,6 +2526,33 @@ function onEdgeRightClick(e,ed){
   // Shift+right-click on an edge deletes it right away, skipping the modal.
   if(e.shiftKey){deleteEdge(ed);return;}
   openEdgeModal(ed);
+}
+// Swaps an edge's from/to, flipping which node is the parent and which is
+// the child (and, for a single-arrow edge, which end the arrowhead points
+// to). Declined with a warning if the swap would close a cycle: with the
+// edge removed, is there already some other path from the new source back
+// to the new destination? If so, reversing it would complete a loop, which
+// the rest of the app (descendant walks, collapsing, N/B jump, tree
+// copy/cut, ...) all assume can't happen.
+function swapEdgeDirection(ed){
+  const idx=edges.indexOf(ed);
+  if(idx<0)return;
+  edges.splice(idx,1);
+  if(wouldCreateCycle(ed.to,ed.from)){
+    edges.splice(idx,0,ed);
+    showToast('⚠ 向きを入れ替えると循環した接続になるため、入れ替えできません');
+    return;
+  }
+  const tmp=ed.from;ed.from=ed.to;ed.to=tmp;
+  edges.splice(idx,0,ed);
+  pushHistory();renderAll();
+  showToast('↔ 接続の向きを入れ替えました');
+}
+function onEdgeClick(e,ed){
+  if(e.shiftKey&&!e.ctrlKey&&!e.metaKey){
+    e.preventDefault();e.stopPropagation();
+    swapEdgeDirection(ed);
+  }
 }
 function openEdgeModal(ed){
   editingEdge=ed;
