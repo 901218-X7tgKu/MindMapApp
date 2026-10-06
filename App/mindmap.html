@@ -250,7 +250,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | WASD: スクロール | Shift+S: スライド幅切替 </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.48</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.49</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -4165,7 +4165,12 @@ function closeAttrModal(){document.getElementById('attr-modal').classList.remove
 // relying on it alone would silently fail to copy anything for a locally
 // opened file.
 function copyNodeContent(n){
-  const content=getDupJumpContent(n);
+  copyTextToClipboard(getDupJumpContent(n));
+}
+// Shared by node-content copy (above) and edge-label copy (appendLabel).
+// Takes the already-resolved string so both callers go through exactly the
+// same clipboard / fallback / toast path.
+function copyTextToClipboard(content){
   if(!content){showToast('⚠ コピーする内容がありません');return;}
   const fallbackCopy=()=>{
     const ta=document.createElement('textarea');
@@ -4560,6 +4565,17 @@ function renderEdges(){
     text.setAttribute('class','edge-label');
     text.dataset.from=String(e.from);text.dataset.to=String(e.to);
     text.textContent=e.label;
+    // The SVG layer is pointer-events:none, so the label has to opt back in
+    // to receive a right-click. Plain right-click copies the edge text;
+    // modified right-clicks are swallowed (no node/tag overlay applies here,
+    // and letting them bubble would pop the empty-canvas tag/status list).
+    text.style.pointerEvents='auto';
+    text.style.userSelect='none';
+    text.addEventListener('contextmenu',evt=>{
+      evt.preventDefault();evt.stopPropagation();
+      if(evt.shiftKey||evt.ctrlKey||evt.metaKey)return;
+      copyTextToClipboard(e.label);
+    });
     svgEl.appendChild(text);
   }
   edges.forEach(e=>{
@@ -5195,7 +5211,7 @@ button.active{background:var(--color-background-info);border-color:var(--color-b
 <div id="app">
   <div id="header">
     <h1>🌐 ${escHtmlStr(title)}</h1>
-    <span style="font-size:11px;color:var(--color-text-tertiary)">クリック: 展開/折り畳み | 右クリック: タグ・ステータスを確認 | Ctrl+Shift+右クリック: URLを開く | WASD: スクロール | Shift+S: スライド幅切替 | N/B: 次/前の接続グループへ | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | Ctrl+Shift+クリック: 同じ内容のノードへジャンプ</span>
+    <span style="font-size:11px;color:var(--color-text-tertiary)">ダブルクリック: 展開/折り畳み | Ctrl+Shift+右クリック: URLを開く | WASD: スクロール | Shift+S: スライド幅切替 | N/B: 次/前の接続グループへ | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | Ctrl+Shift+クリック: 同じ内容のノードへジャンプ</span>
     <button id="btn-theme" style="margin-left:8px;padding:4px 10px"><i id="theme-icon" class="ti ti-moon"></i> <span id="theme-label">ダーク</span></button>
   </div>
   <div id="canvas">
