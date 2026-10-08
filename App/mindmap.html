@@ -250,7 +250,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | WASD: スクロール | Shift+S: スライド幅切替 </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.51</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.52</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -562,8 +562,8 @@ function restoreSnapshot(s){
   _skipHistory=false;
   _suppressSpawnAnim=false;
 }
-function undo(){if(historyIdx<=0)return;historyIdx--;restoreSnapshot(history[historyIdx]);selected=null;updateUndoRedo();}
-function redo(){if(historyIdx>=history.length-1)return;historyIdx++;restoreSnapshot(history[historyIdx]);selected=null;updateUndoRedo();}
+function undo(){flushNudgeHistory();if(historyIdx<=0)return;historyIdx--;restoreSnapshot(history[historyIdx]);selected=null;updateUndoRedo();}
+function redo(){flushNudgeHistory();if(historyIdx>=history.length-1)return;historyIdx++;restoreSnapshot(history[historyIdx]);selected=null;updateUndoRedo();}
 function updateUndoRedo(){btnUndo.disabled=historyIdx<=0;btnRedo.disabled=historyIdx>=history.length-1;}
 
 // ── Serialization ─────────────────────────────────────────
@@ -1943,64 +1943,72 @@ function onDragMove(e){
   }
   scheduleRenderAll();
 }
+// Re-evaluates group membership for a node that was just moved (and for any
+// descendants / group-contents carried along with it). Shared by the mouse
+// drag drop (onDragUp) and the Ctrl+Arrow keyboard nudge, so both behave the
+// same way: dropping/nudging a node into (or out of) a group's rectangle
+// registers (or clears) its membership.
+function reassignGroupsAfterMove(node,descs,extras){
+  if(node.type!=='group'){
+    // Dropping a text/image node: join the group whose rectangle it now sits
+    // inside, or leave its current group if it was dragged back out of it.
+    const g=findGroupContaining(node.x,node.y,node.id);
+    node.groupId=g?g.id:null;
+  } else {
+    // The group itself can also become a member of an outer group it was
+    // dropped into (nested groups). It must never join itself or any of
+    // its own (possibly nested) members — that would create a cycle.
+    // Decided *before* the regroup call below (and protected from it) so
+    // two heavily-overlapping group rectangles can't end up claiming each
+    // other in a race — see the comment on regroupNodesForRect.
+    const ownIds=getAllGroupMemberIds(node.id);
+    ownIds.add(node.id);
+    const outerGroup=findEnclosingGroup(node,ownIds);
+    node.groupId=outerGroup?outerGroup.id:null;
+    // Moving the group itself can also newly cover nodes that weren't
+    // dragged along with it (they just happened to already be sitting
+    // where the group ended up) — pick those up the same way a resize does.
+    regroupNodesForRect(node,outerGroup?outerGroup.id:null);
+  }
+  // Ctrl-dragged descendants moved along with node re-evaluate their
+  // own group membership too, exactly like node does, so a whole
+  // subtree dragged into (or out of) a group registers every member. A
+  // descendant that's itself a group re-checks its own rectangle instead,
+  // the same way directly dragging that group would, and can likewise pick
+  // up (or leave) an outer group of its own.
+  descs.forEach(d=>{
+    if(d.type==='group'){
+      const ownIds=getAllGroupMemberIds(d.id);
+      ownIds.add(d.id);
+      const outerGroup=findEnclosingGroup(d,ownIds);
+      d.groupId=outerGroup?outerGroup.id:null;
+      regroupNodesForRect(d,outerGroup?outerGroup.id:null);
+      return;
+    }
+    const g=findGroupContaining(d.x,d.y,d.id);
+    d.groupId=g?g.id:null;
+  });
+  // Non-member descendants that were carried along only because their
+  // (non-member) parent is a group member also re-evaluate their own
+  // group membership once the drag ends, exactly like a normally-dragged
+  // node would (and like a group descendant that's itself a group does,
+  // just above).
+  extras.forEach(d=>{
+    if(d.type==='group'){
+      const ownIds=getAllGroupMemberIds(d.id);
+      ownIds.add(d.id);
+      const outerGroup=findEnclosingGroup(d,ownIds);
+      d.groupId=outerGroup?outerGroup.id:null;
+      regroupNodesForRect(d,outerGroup?outerGroup.id:null);
+      return;
+    }
+    const g=findGroupContaining(d.x,d.y,d.id);
+    d.groupId=g?g.id:null;
+  });
+}
 function onDragUp(){
   if(dragNode&&didDrag){
-    if(dragNode.type!=='group'){
-      // Dropping a text/image node: join the group whose rectangle it now sits
-      // inside, or leave its current group if it was dragged back out of it.
-      const g=findGroupContaining(dragNode.x,dragNode.y,dragNode.id);
-      dragNode.groupId=g?g.id:null;
-    } else {
-      // The group itself can also become a member of an outer group it was
-      // dropped into (nested groups). It must never join itself or any of
-      // its own (possibly nested) members — that would create a cycle.
-      // Decided *before* the regroup call below (and protected from it) so
-      // two heavily-overlapping group rectangles can't end up claiming each
-      // other in a race — see the comment on regroupNodesForRect.
-      const ownIds=getAllGroupMemberIds(dragNode.id);
-      ownIds.add(dragNode.id);
-      const outerGroup=findEnclosingGroup(dragNode,ownIds);
-      dragNode.groupId=outerGroup?outerGroup.id:null;
-      // Moving the group itself can also newly cover nodes that weren't
-      // dragged along with it (they just happened to already be sitting
-      // where the group ended up) — pick those up the same way a resize does.
-      regroupNodesForRect(dragNode,outerGroup?outerGroup.id:null);
-    }
-    // Ctrl-dragged descendants moved along with dragNode re-evaluate their
-    // own group membership too, exactly like dragNode does, so a whole
-    // subtree dragged into (or out of) a group registers every member. A
-    // descendant that's itself a group re-checks its own rectangle instead,
-    // the same way directly dragging that group would, and can likewise pick
-    // up (or leave) an outer group of its own.
-    dragDescendants.forEach(d=>{
-      if(d.type==='group'){
-        const ownIds=getAllGroupMemberIds(d.id);
-        ownIds.add(d.id);
-        const outerGroup=findEnclosingGroup(d,ownIds);
-        d.groupId=outerGroup?outerGroup.id:null;
-        regroupNodesForRect(d,outerGroup?outerGroup.id:null);
-        return;
-      }
-      const g=findGroupContaining(d.x,d.y,d.id);
-      d.groupId=g?g.id:null;
-    });
-    // Non-member descendants that were carried along only because their
-    // (non-member) parent is a group member also re-evaluate their own
-    // group membership once the drag ends, exactly like a normally-dragged
-    // node would (and like a group descendant that's itself a group does,
-    // just above).
-    dragExtraDescendants.forEach(d=>{
-      if(d.type==='group'){
-        const ownIds=getAllGroupMemberIds(d.id);
-        ownIds.add(d.id);
-        const outerGroup=findEnclosingGroup(d,ownIds);
-        d.groupId=outerGroup?outerGroup.id:null;
-        regroupNodesForRect(d,outerGroup?outerGroup.id:null);
-        return;
-      }
-      const g=findGroupContaining(d.x,d.y,d.id);
-      d.groupId=g?g.id:null;
-    });
+    reassignGroupsAfterMove(dragNode,dragDescendants,dragExtraDescendants);
     pushHistory();
     // The drag's own moves were drawn via the coalesced scheduleRenderAll(),
     // which only guarantees a redraw within the next animation frame — fine
@@ -2021,6 +2029,61 @@ function onDragUp(){
   }
   dragNode=null;dragDescendants=[];dragExtraDescendants=[];
   document.removeEventListener('mousemove',onDragMove);document.removeEventListener('mouseup',onDragUp);
+}
+
+// ── Ctrl+Arrow: fine-tune the selected node's position ────
+// Moves the selected node by a small step per key press. It follows the same
+// rules as a mouse drag: a group carries its contents along, and a collapsed
+// node carries its (hidden) descendants. Group membership is re-evaluated, and
+// one undo-history entry is recorded, once the key presses stop (a held key
+// repeats many times; recording each would flood the 60-entry history).
+let _nudgeCtx=null,_nudgeTimer=null;
+function nudgeSelectedNode(dxDir,dyDir){
+  const n=nodes.find(nd=>nd.id===selected);
+  if(!n||!isNodeVisible(n.id))return false;
+  // A pending nudge on a different node is finalised before starting this one.
+  if(_nudgeCtx&&_nudgeCtx.node!==n)flushNudgeHistory();
+  // 1 screen pixel at least (integer map units so saved positions stay exact).
+  const step=Math.max(1,Math.round(1/scale));
+  const dx=dxDir*step,dy=dyDir*step;
+  const collapsed=collapsedNodes.has(n.id);
+  let descs=[];
+  if(collapsed){
+    const descIds=getAllDescendants(n.id);
+    descs=nodes.filter(nd=>descIds.has(nd.id));
+  }
+  const descIdSet=collapsed?new Set(descs.map(d=>d.id)):null;
+  const movedIds=descIdSet?new Set(descIdSet):new Set();
+  movedIds.add(n.id);
+  const extras=[];
+  n.x+=dx;n.y+=dy;
+  descs.forEach(d=>{
+    d.x+=dx;d.y+=dy;
+    movedIds.add(d.id);
+    if(d.type==='group')moveGroupMembers(d.id,dx,dy,descIdSet,movedIds,extras,true);
+  });
+  if(n.type==='group')moveGroupMembers(n.id,dx,dy,descIdSet,movedIds,extras,collapsed);
+  // Keep the union of everything moved so far in this burst for the final regroup.
+  if(_nudgeCtx){
+    descs.forEach(d=>{if(!_nudgeCtx.descs.includes(d))_nudgeCtx.descs.push(d);});
+    extras.forEach(d=>{if(!_nudgeCtx.extras.includes(d))_nudgeCtx.extras.push(d);});
+  } else {
+    _nudgeCtx={node:n,descs:descs.slice(),extras:extras.slice()};
+  }
+  _unsaved=true;
+  scheduleRenderAll();
+  clearTimeout(_nudgeTimer);
+  _nudgeTimer=setTimeout(flushNudgeHistory,400);
+  return true;
+}
+function flushNudgeHistory(){
+  clearTimeout(_nudgeTimer);_nudgeTimer=null;
+  if(!_nudgeCtx)return;
+  const c=_nudgeCtx;_nudgeCtx=null;
+  if(!nodes.includes(c.node))return; // deleted (e.g. via undo) before the burst was finalised
+  reassignGroupsAfterMove(c.node,c.descs,c.extras);
+  pushHistory();
+  renderAll();
 }
 
 let lastPlainClick={id:null,time:0};
@@ -3275,6 +3338,14 @@ document.addEventListener('keydown',e=>{
   if(e.target.tagName==='TEXTAREA'||e.target.tagName==='INPUT')return;
   if(e.target.isContentEditable)return;
   if(e.target.closest&&e.target.closest('.modal-overlay'))return; // let modals (img/edge) handle their own keys
+
+  // Ctrl/Cmd + arrow keys: nudge the selected node's position
+  if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&!e.altKey&&selected!==null&&
+     (e.key==='ArrowUp'||e.key==='ArrowDown'||e.key==='ArrowLeft'||e.key==='ArrowRight')){
+    const dxDir=e.key==='ArrowLeft'?-1:(e.key==='ArrowRight'?1:0);
+    const dyDir=e.key==='ArrowUp'?-1:(e.key==='ArrowDown'?1:0);
+    if(nudgeSelectedNode(dxDir,dyDir)){e.preventDefault();return;}
+  }
 
   // ↑ / ↓ (no modifiers): zoom in / out (around the viewport center)
   if((e.key==='ArrowUp'||e.key==='ArrowDown')&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey){
