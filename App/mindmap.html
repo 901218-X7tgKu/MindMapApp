@@ -84,8 +84,8 @@ html,body{height:100%;background:var(--color-background-secondary);color:var(--c
 .img-node-el.spawn-in{animation:nodeSpawn .45s var(--ease-bounce) both}
 .img-node-wrap{border-radius:12px;border:1.5px solid var(--color-border-secondary);background:var(--color-background-primary);overflow:visible;transition:outline .18s var(--ease-out),transform .18s var(--ease-out);display:inline-block}
 .img-node-wrap.selected{outline:2.5px solid var(--color-text-info);outline-offset:2px;border-radius:12px}
-.img-node-wrap img{display:block;border-radius:12px 12px 0 0}
-.img-node-caption{padding:6px 10px;font-size:11px;color:var(--color-text-secondary);border-top:0.5px solid var(--color-border-tertiary);border-radius:0 0 12px 12px;background:var(--color-background-primary);word-break:break-all;white-space:pre-wrap;cursor:text;border:1.5px solid var(--color-border-secondary);border-top:none}
+.img-node-wrap img{display:block;max-width:100%;border-radius:12px 12px 0 0}
+.img-node-caption{padding:6px 10px;font-size:11px;color:var(--color-text-secondary);border-top:0.5px solid var(--color-border-tertiary);border-radius:0 0 12px 12px;background:var(--color-background-primary);word-break:break-all;white-space:pre-wrap;cursor:text;border:none}
 .img-node-caption.empty{color:var(--color-text-tertiary);font-style:italic}
 .img-node-caption input,.img-node-caption textarea{width:100%;background:none;border:none;outline:none;font-size:11px;color:var(--color-text-primary);font-family:inherit;resize:none;padding:0}
 
@@ -250,7 +250,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | WASD: スクロール | Shift+S: スライド幅切替 </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.52</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.53</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -5201,8 +5201,8 @@ html,body{height:100%;background:var(--color-background-secondary);color:var(--c
 .group-box{position:relative;box-sizing:border-box;border-radius:14px;border:2.5px dashed}
 .group-label{position:absolute;top:-11px;left:14px;font-size:13px;font-weight:600;line-height:1.4;background:var(--color-background-primary);padding:0 5px;pointer-events:none;opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:4px}
 .img-node-wrap{border-radius:12px;border:1.5px solid var(--color-border-secondary);background:var(--color-background-primary);display:inline-block;overflow:visible;transition:outline .18s var(--ease-out),transform .18s var(--ease-out)}
-.img-node-wrap img{display:block;border-radius:12px 12px 0 0}
-.img-node-caption{padding:6px 10px;font-size:11px;color:var(--color-text-secondary);border-top:0.5px solid var(--color-border-tertiary);border-radius:0 0 12px 12px;background:var(--color-background-primary);word-break:break-all;white-space:pre-wrap;border:1.5px solid var(--color-border-secondary);border-top:none}
+.img-node-wrap img{display:block;max-width:100%;border-radius:12px 12px 0 0}
+.img-node-caption{padding:6px 10px;font-size:11px;color:var(--color-text-secondary);border-top:0.5px solid var(--color-border-tertiary);border-radius:0 0 12px 12px;background:var(--color-background-primary);word-break:break-all;white-space:pre-wrap;border:none}
 .search-hit{outline:2.5px solid #f5a623!important;outline-offset:3px}
 .search-current{outline:3px solid #e8430a!important;outline-offset:3px}
 .node-box.hover-self,.img-node-wrap.hover-self{outline:2.5px solid #f5a100;outline-offset:3px;box-shadow:0 0 0 4px rgba(245,161,0,.15);transform:scale(1.045)}
