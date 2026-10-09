@@ -250,7 +250,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | WASD: スクロール | Shift+S: スライド幅切替 </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.53</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.54</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -1879,6 +1879,21 @@ document.addEventListener('keydown',e=>{
 // A mouse press between two Shift taps (e.g. two quick Shift+drags) must
 // not count as a double-tap.
 document.addEventListener('mousedown',()=>{panLockLastShift=0;},true);
+// A single click of the mouse wheel (middle button) on the canvas toggles
+// pan-lock mode too, same as double-tapping Shift. Registered in the capture
+// phase because node elements stop mousedown propagation, so a normal
+// (bubbling) canvas listener would never see wheel clicks made on a node.
+// Ignored while typing / editing or while a modal is open, like the Shift
+// double-tap. preventDefault suppresses the browser's middle-click autoscroll
+// (mousedown) and any "open in new tab" style default (auxclick).
+canvas.addEventListener('mousedown',e=>{
+  if(e.button!==1)return;
+  const t=e.target,tag=t&&t.tagName;
+  if(tag==='INPUT'||tag==='TEXTAREA'||(t&&t.isContentEditable)||isAnyModalOpen())return;
+  e.preventDefault();
+  togglePanLock();
+},true);
+canvas.addEventListener('auxclick',e=>{if(e.button===1)e.preventDefault();},true);
 let dragNode=null,dragOffset={x:0,y:0},didDrag=false,dragDescendants=[],dragExtraDescendants=[];
 function onNodeMouseDown(e,n){
   if(connecting||e.shiftKey||(panLock&&!e.ctrlKey&&!e.metaKey))return;e.stopPropagation();if(e.button!==0)return;
