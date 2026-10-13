@@ -26,6 +26,7 @@
   --color-border-primary: rgba(0,0,0,.32);
   --color-border-info: #b5d4f4;
   --color-edge: #aaa8a0;
+  --edge-red:#d64545;--edge-orange:#e07a1f;--edge-green:#3f9a4a;--edge-blue:#2f7fd0;--edge-purple:#7c5cd6;--edge-pink:#d2467f;--edge-black:#3a3935;
   --border-radius-md: 8px;
   --border-radius-lg: 12px;
   --ease-bounce: cubic-bezier(.34,1.56,.64,1);
@@ -54,6 +55,7 @@ body.dark{
   --color-border-primary: rgba(255,255,255,.28);
   --color-border-info: #185fa5;
   --color-edge: #6e6c66;
+  --edge-red:#ef7a7a;--edge-orange:#f0a050;--edge-green:#6fc27a;--edge-blue:#6aaaf0;--edge-purple:#a68cf0;--edge-pink:#ee86ae;--edge-black:#d3d1c7;
 }
 html,body{height:100%;background:var(--color-background-secondary);color:var(--color-text-primary);font-family:var(--font-sans)}
 #app{display:flex;flex-direction:column;height:100vh}
@@ -207,6 +209,12 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
 #edge-modal .edge-style-row{display:flex;gap:6px;flex-wrap:wrap}
 #edge-modal .edge-style-opt{padding:7px 10px;color:var(--color-text-secondary)}
 #edge-modal .edge-style-opt.active{color:var(--color-text-info)}
+#edge-modal .edge-color-block{margin:12px 0 12px}
+#edge-modal .edge-color-row{display:flex;gap:8px;flex-wrap:wrap}
+#edge-modal .edge-color-opt{width:28px;height:28px;padding:0;border-radius:50%;border:2px solid transparent;background:none;justify-content:center;align-items:center}
+#edge-modal .edge-color-opt:hover:not(:disabled){background:none}
+#edge-modal .edge-color-opt span{display:block;width:16px;height:16px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(0,0,0,.2)}
+#edge-modal .edge-color-opt.active{border-color:var(--color-text-info)}
 .edge-label{cursor:pointer;user-select:none}
 
 /* Search highlight */
@@ -250,7 +258,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | WASD: スクロール | Shift+S: スライド幅切替 </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.54</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.55</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -261,6 +269,27 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
       <defs>
         <marker id="arr" viewBox="0 0 10 10" refX="7.4" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
           <path d="M1 1L9 5L1 9Z" fill="var(--color-edge)" stroke="none"/>
+        </marker>
+        <marker id="arr-red" viewBox="0 0 10 10" refX="7.4" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M1 1L9 5L1 9Z" fill="var(--edge-red)" stroke="none"/>
+        </marker>
+        <marker id="arr-orange" viewBox="0 0 10 10" refX="7.4" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M1 1L9 5L1 9Z" fill="var(--edge-orange)" stroke="none"/>
+        </marker>
+        <marker id="arr-green" viewBox="0 0 10 10" refX="7.4" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M1 1L9 5L1 9Z" fill="var(--edge-green)" stroke="none"/>
+        </marker>
+        <marker id="arr-blue" viewBox="0 0 10 10" refX="7.4" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M1 1L9 5L1 9Z" fill="var(--edge-blue)" stroke="none"/>
+        </marker>
+        <marker id="arr-purple" viewBox="0 0 10 10" refX="7.4" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M1 1L9 5L1 9Z" fill="var(--edge-purple)" stroke="none"/>
+        </marker>
+        <marker id="arr-pink" viewBox="0 0 10 10" refX="7.4" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M1 1L9 5L1 9Z" fill="var(--edge-pink)" stroke="none"/>
+        </marker>
+        <marker id="arr-black" viewBox="0 0 10 10" refX="7.4" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M1 1L9 5L1 9Z" fill="var(--edge-black)" stroke="none"/>
         </marker>
         <marker id="arr-hover" viewBox="0 0 10 10" refX="7.4" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
           <path d="M1 1L9 5L1 9Z" fill="#f5a100" stroke="none"/>
@@ -434,6 +463,19 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
             </button>
           </div>
         </div>
+        <div class="edge-color-block">
+          <div class="edge-style-label">色</div>
+          <div class="edge-color-row" id="edge-color-row">
+            <button type="button" class="edge-color-opt" data-color="" title="標準（灰色）"><span style="background:var(--color-edge)"></span></button>
+            <button type="button" class="edge-color-opt" data-color="red" title="赤"><span style="background:var(--edge-red)"></span></button>
+            <button type="button" class="edge-color-opt" data-color="orange" title="オレンジ"><span style="background:var(--edge-orange)"></span></button>
+            <button type="button" class="edge-color-opt" data-color="green" title="緑"><span style="background:var(--edge-green)"></span></button>
+            <button type="button" class="edge-color-opt" data-color="blue" title="青"><span style="background:var(--edge-blue)"></span></button>
+            <button type="button" class="edge-color-opt" data-color="purple" title="紫"><span style="background:var(--edge-purple)"></span></button>
+            <button type="button" class="edge-color-opt" data-color="pink" title="ピンク"><span style="background:var(--edge-pink)"></span></button>
+            <button type="button" class="edge-color-opt" data-color="black" title="黒（ダークモードでは白）"><span style="background:var(--edge-black)"></span></button>
+          </div>
+        </div>
         <input id="edge-modal-input" class="edge-label-input" type="text" placeholder="接続線に添えるコメント（短文）" maxlength="60" autocomplete="off">
         <div class="modal-actions">
           <button id="edge-modal-delete" class="danger" style="margin-right:auto"><i class="ti ti-trash"></i> エッジの削除</button>
@@ -501,6 +543,11 @@ const COLORS=[
   {bg:'#FEF0F5',border:'#A3245A',text:'#7A1A42'},
   {bg:'#F0FAE5',border:'#3F7A1A',text:'#2A5210'},
 ];
+// Edge colour: an edge may carry e.color (one of EDGE_COLOR_KEYS). No colour = the
+// default grey. The actual hues live in CSS variables (--edge-<key>) so they
+// follow the light/dark theme, and each colour has a matching arrowhead marker.
+const EDGE_COLOR_KEYS=['red','orange','green','blue','purple','pink','black'];
+function edgeColorKey(e){return (e&&EDGE_COLOR_KEYS.indexOf(e.color)>=0)?e.color:null;}
 const COLORS_DARK=[
   {bg:'#04342C',border:'#1D9E75',text:'#9FE1CB'},
   {bg:'#042C53',border:'#185FA5',text:'#B5D4F4'},
@@ -617,6 +664,12 @@ function serialize(){
     }
     lines.push(line);
   });
+  // Edge colours go on their own lines (after all EDGE lines) so the EDGE line
+  // format is unchanged and older versions simply skip these unknown lines.
+  edges.forEach(e=>{
+    const ck=edgeColorKey(e);
+    if(ck)lines.push(`EDGECOLOR ${e.from} ${e.to} ${ck}`);
+  });
   if(collapsedNodes.size>0)lines.push(`COLLAPSED ${[...collapsedNodes].join(',')}`);
   lines.push(`META nodeId=${nodeId}`);
   return lines.join('\n');
@@ -624,7 +677,7 @@ function serialize(){
 function deserialize(text){
   const lines=text.trim().split('\n');
   if(!lines[0].startsWith('MINDMAP'))return null;
-  const ns=[],es=[];let nid=0;
+  const ns=[],es=[],edgeColorList=[];let nid=0;
   const attrsMap={};
   const showCommentMap={};
   const groupMemberMap={};
@@ -662,6 +715,10 @@ function deserialize(text){
     } else if(line.startsWith('IMGCMT ')){
       const m=line.match(/^IMGCMT (\d+) ([01])$/);
       if(m)showCommentMap[+m[1]]=m[2]==='1';
+    } else if(line.startsWith('EDGECOLOR ')){
+      // "EDGECOLOR <from> <to> <colorKey>" — unknown keys are ignored.
+      const ep=line.split(' ');
+      if(ep.length>=4&&EDGE_COLOR_KEYS.indexOf(ep[3].trim())>=0)edgeColorList.push({from:+ep[1],to:+ep[2],color:ep[3].trim()});
     } else if(line.startsWith('BRANCH ')){
       const m=line.match(/^BRANCH (\d+)$/);
       if(m)branchSet.add(+m[1]);
@@ -690,6 +747,10 @@ function deserialize(text){
       const mo=line.match(/nodeId=(\d+)/);if(mo)nid=+mo[1];
     }
   }
+  edgeColorList.forEach(c=>{
+    const ed=es.find(x=>x.from===c.from&&x.to===c.to&&!x.color);
+    if(ed)ed.color=c.color;
+  });
   ns.forEach(n=>{
     const a=attrsMap[n.id];
     n.url=a?a.url:'';
@@ -1614,7 +1675,9 @@ function renderEdges(){
     const path=document.createElementNS('http://www.w3.org/2000/svg','path');
     path.setAttribute('d',dAttr);
     path.setAttribute('fill','none');
-    path.setAttribute('stroke','var(--color-edge)');
+    const ck=edgeColorKey(e);
+    path.setAttribute('stroke',ck?'var(--edge-'+ck+')':'var(--color-edge)');
+    path.dataset.markerId=ck?'arr-'+ck:'arr';
     path.setAttribute('stroke-width', String(strokeW));
     if(dashArr)path.setAttribute('stroke-dasharray',dashArr);
     path.setAttribute('class','edge');
@@ -1624,7 +1687,7 @@ function renderEdges(){
     path.dataset.baseWidth=String(strokeW);
     path.dataset.arrow=hasArrow?'1':'0';
     path.dataset.arrowStart='0';
-    if(hasArrow)path.setAttribute('marker-end','url(#arr)');
+    if(hasArrow)path.setAttribute('marker-end','url(#'+path.dataset.markerId+')');
     svgEl.appendChild(path);
     // Wide invisible hit-area on top of the thin visible line, so right-click
     // doesn't require pixel-precise aim on a 1.5px stroke.
@@ -1747,8 +1810,9 @@ function applyHoverHighlight(){
     p.classList.remove('hover-edge');
     const baseW=+p.dataset.baseWidth||1.5*scale;
     p.setAttribute('stroke-width', String(baseW));
-    if(p.dataset.arrow==='1')p.setAttribute('marker-end','url(#arr)');
-    if(p.dataset.arrowStart==='1')p.setAttribute('marker-start','url(#arr)');
+    const mk='url(#'+(p.dataset.markerId||'arr')+')';
+    if(p.dataset.arrow==='1')p.setAttribute('marker-end',mk);
+    if(p.dataset.arrowStart==='1')p.setAttribute('marker-start',mk);
   });
   // While a node is being dragged, its position updates one frame behind the
   // browser's mouse hit-test, which was causing hover-enter/leave to fire
@@ -2593,6 +2657,7 @@ nodeModal.addEventListener('keydown',e=>{
 // ── Edge comment modal ────────────────────────────────────
 let editingEdge=null;
 let pendingEdgeStyle='arrow';
+let pendingEdgeColor=null;
 const edgeModal=document.getElementById('edge-modal');
 const edgeModalInput=document.getElementById('edge-modal-input');
 const edgeStyleButtons=document.querySelectorAll('#edge-style-row .edge-style-opt');
@@ -2601,6 +2666,12 @@ function setPendingEdgeStyle(style){
   edgeStyleButtons.forEach(b=>b.classList.toggle('active',b.dataset.style===style));
 }
 edgeStyleButtons.forEach(b=>b.addEventListener('click',()=>setPendingEdgeStyle(b.dataset.style)));
+const edgeColorButtons=document.querySelectorAll('#edge-color-row .edge-color-opt');
+function setPendingEdgeColor(color){
+  pendingEdgeColor=color||null;
+  edgeColorButtons.forEach(b=>b.classList.toggle('active',(b.dataset.color||null)===pendingEdgeColor));
+}
+edgeColorButtons.forEach(b=>b.addEventListener('click',()=>setPendingEdgeColor(b.dataset.color)));
 // Removes a single edge (the connection only — both nodes stay). Undoable
 // like any other edit.
 function deleteEdge(ed){
@@ -2647,6 +2718,7 @@ function openEdgeModal(ed){
   editingEdge=ed;
   edgeModalInput.value=ed.label||'';
   setPendingEdgeStyle(ed.style||'arrow');
+  setPendingEdgeColor(edgeColorKey(ed));
   edgeModal.classList.remove('closing');
   edgeModal.classList.add('show');
   edgeModalInput.focus();
@@ -2657,6 +2729,7 @@ function saveEdgeModal(){
   const val=edgeModalInput.value.trim();
   if(val)editingEdge.label=val;else delete editingEdge.label;
   if(pendingEdgeStyle&&pendingEdgeStyle!=='arrow')editingEdge.style=pendingEdgeStyle;else delete editingEdge.style;
+  if(pendingEdgeColor)editingEdge.color=pendingEdgeColor;else delete editingEdge.color;
   closeOverlay(edgeModal);
   pushHistory();renderAll();
 }
@@ -3480,6 +3553,7 @@ document.addEventListener('keydown',e=>{
         const ne={from:idMap.get(ed.from),to:idMap.get(ed.to)};
         if(ed.label)ne.label=ed.label;
         if(ed.style)ne.style=ed.style;
+        if(ed.color)ne.color=ed.color;
         return ne;
       });
       // Group membership only survives the copy if the group node itself was
@@ -4012,10 +4086,12 @@ const RAW=${JSON.stringify(mapData)};
 
 let hoveredNodeId=null;
 
+var EDGE_COLOR_KEYS=['red','orange','green','blue','purple','pink','black'];
+function edgeColorKey(e){return (e&&EDGE_COLOR_KEYS.indexOf(e.color)>=0)?e.color:null;}
 function deserialize(text){
   const lines=text.trim().split('\\n');
   if(!lines[0].startsWith('MINDMAP'))return null;
-  const ns=[],es=[];let nid=0;
+  const ns=[],es=[],edgeColorList=[];let nid=0;
   const attrsMap={};
   const showCommentMap={};
   const groupMemberMap={};
@@ -4050,6 +4126,10 @@ function deserialize(text){
     } else if(line.startsWith('IMGCMT ')){
       const m=line.match(/^IMGCMT (\\d+) ([01])$/);
       if(m)showCommentMap[+m[1]]=m[2]==='1';
+    } else if(line.startsWith('EDGECOLOR ')){
+      // "EDGECOLOR <from> <to> <colorKey>" — unknown keys are ignored.
+      const ep=line.split(' ');
+      if(ep.length>=4&&EDGE_COLOR_KEYS.indexOf(ep[3].trim())>=0)edgeColorList.push({from:+ep[1],to:+ep[2],color:ep[3].trim()});
     } else if(line.startsWith('BRANCH ')){
       const m=line.match(/^BRANCH (\\d+)$/);
       if(m)branchSet.add(+m[1]);
@@ -4076,6 +4156,10 @@ function deserialize(text){
       ns._collapsed=ids;
     }
   }
+  edgeColorList.forEach(c=>{
+    const ed=es.find(x=>x.from===c.from&&x.to===c.to&&!x.color);
+    if(ed)ed.color=c.color;
+  });
   ns.forEach(n=>{
     const a=attrsMap[n.id];
     n.url=a?a.url:'';
@@ -4155,8 +4239,9 @@ function applyHoverHighlight(){
     p.classList.remove('hover-edge');
     const baseW=+p.dataset.baseWidth||1.5*scale;
     p.setAttribute('stroke-width',String(baseW));
-    if(p.dataset.arrow==='1')p.setAttribute('marker-end','url(#arr)');
-    if(p.dataset.arrowStart==='1')p.setAttribute('marker-start','url(#arr)');
+    const mk='url(#'+(p.dataset.markerId||'arr')+')';
+    if(p.dataset.arrow==='1')p.setAttribute('marker-end',mk);
+    if(p.dataset.arrowStart==='1')p.setAttribute('marker-start',mk);
   });
   if(hoveredNodeId===null)return;
   const parentIds=new Set(edges.filter(e=>e.to===hoveredNodeId).map(e=>e.from));
@@ -4568,14 +4653,16 @@ function renderEdges(){
       ? ('M'+p0.x+' '+p0.y+' Q'+p1.x+' '+p1.y+' '+p2.x+' '+p2.y)
       : buildWobblePath(p0,p1,p2,edgeLineShape(style),scale,false,hasArrow);
     path.setAttribute('d',dAttr);
-    path.setAttribute('fill','none');path.setAttribute('stroke','var(--color-edge)');
+    const ck=edgeColorKey(e);
+    path.setAttribute('fill','none');path.setAttribute('stroke',ck?('var(--edge-'+ck+')'):'var(--color-edge)');
+    path.dataset.markerId=ck?('arr-'+ck):'arr';
     path.setAttribute('stroke-width',String(strokeW));path.setAttribute('class','edge');
     if(dashArr)path.setAttribute('stroke-dasharray',dashArr);
     path.dataset.from=String(e.from);path.dataset.to=String(e.to);
     path.dataset.baseWidth=String(strokeW);
     path.dataset.arrow=hasArrow?'1':'0';
     path.dataset.arrowStart='0';
-    if(hasArrow)path.setAttribute('marker-end','url(#arr)');
+    if(hasArrow)path.setAttribute('marker-end','url(#'+path.dataset.markerId+')');
     svgEl.appendChild(path);
     return {ex,ey,rect,mx};
   }
@@ -5178,6 +5265,7 @@ renderAll();
   --color-border-primary:rgba(0,0,0,.32);--color-text-info:#0c447c;
   --color-background-info:#e6f1fb;--color-border-info:#b5d4f4;
   --color-edge:#aaa8a0;
+  --edge-red:#d64545;--edge-orange:#e07a1f;--edge-green:#3f9a4a;--edge-blue:#2f7fd0;--edge-purple:#7c5cd6;--edge-pink:#d2467f;--edge-black:#3a3935;
   --border-radius-md:8px;--border-radius-lg:12px;
   --ease-bounce:cubic-bezier(.34,1.56,.64,1);
   --ease-out:cubic-bezier(.22,1,.36,1);
@@ -5191,6 +5279,7 @@ body.dark{
   --color-border-primary:rgba(255,255,255,.28);--color-text-info:#85b7eb;
   --color-background-info:#0c2a45;--color-border-info:#185fa5;
   --color-edge:#6e6c66;
+  --edge-red:#ef7a7a;--edge-orange:#f0a050;--edge-green:#6fc27a;--edge-blue:#6aaaf0;--edge-purple:#a68cf0;--edge-pink:#ee86ae;--edge-black:#d3d1c7;
 }
 html,body{height:100%;background:var(--color-background-secondary);color:var(--color-text-primary);font-family:var(--font-sans)}
 #app{display:flex;flex-direction:column;height:100vh}
@@ -5273,6 +5362,27 @@ button.active{background:var(--color-background-info);border-color:var(--color-b
       <defs>
         <marker id="arr" viewBox="0 0 10 10" refX="7.4" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
           <path d="M1 1L9 5L1 9Z" fill="var(--color-edge)" stroke="none"/>
+        </marker>
+        <marker id="arr-red" viewBox="0 0 10 10" refX="7.4" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M1 1L9 5L1 9Z" fill="var(--edge-red)" stroke="none"/>
+        </marker>
+        <marker id="arr-orange" viewBox="0 0 10 10" refX="7.4" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M1 1L9 5L1 9Z" fill="var(--edge-orange)" stroke="none"/>
+        </marker>
+        <marker id="arr-green" viewBox="0 0 10 10" refX="7.4" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M1 1L9 5L1 9Z" fill="var(--edge-green)" stroke="none"/>
+        </marker>
+        <marker id="arr-blue" viewBox="0 0 10 10" refX="7.4" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M1 1L9 5L1 9Z" fill="var(--edge-blue)" stroke="none"/>
+        </marker>
+        <marker id="arr-purple" viewBox="0 0 10 10" refX="7.4" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M1 1L9 5L1 9Z" fill="var(--edge-purple)" stroke="none"/>
+        </marker>
+        <marker id="arr-pink" viewBox="0 0 10 10" refX="7.4" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M1 1L9 5L1 9Z" fill="var(--edge-pink)" stroke="none"/>
+        </marker>
+        <marker id="arr-black" viewBox="0 0 10 10" refX="7.4" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M1 1L9 5L1 9Z" fill="var(--edge-black)" stroke="none"/>
         </marker>
         <marker id="arr-hover" viewBox="0 0 10 10" refX="7.4" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
           <path d="M1 1L9 5L1 9Z" fill="#f5a100" stroke="none"/>
