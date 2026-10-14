@@ -250,6 +250,8 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
 .node-box{position:relative;}
 .img-node-wrap{position:relative;}
 .private-badge{position:absolute;top:-8px;right:-8px;width:20px;height:20px;border-radius:50%;background:var(--color-background-primary);border:1px solid var(--color-border-secondary);display:flex;align-items:center;justify-content:center;font-size:11px;box-shadow:0 1px 3px rgba(0,0,0,.15);pointer-events:none;}
+.zoom-anim-btn{font-size:11px;padding:5px 8px}
+.zoom-anim-btn.active{background:var(--color-background-info);border-color:var(--color-border-info);color:var(--color-text-info)}
 </style>
 </head>
 <body>
@@ -257,7 +259,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | WASD: スクロール | Shift+S: スライド幅切替 </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.56</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.57</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -509,6 +511,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
     <button id="btn-export"><i class="ti ti-file-export"></i> ファイル</button>
     <div class="sep"></div>
     <input id="zoom-level" type="text" inputmode="numeric" value="100%" title="現在の拡大率（クリックして直接入力：1%〜400%）" style="width:56px;text-align:center;font-family:var(--font-sans);font-size:12px;padding:5px 4px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-primary);color:var(--color-text-primary);outline:none;cursor:text">
+    <button id="btn-zoom-anim" class="zoom-anim-btn active" type="button" aria-pressed="true" title="ズームのアニメーション：ON（クリックで切り替え／Cキーと拡大率の直接入力が対象）">アニメ</button>
     <div class="sep"></div>
     <div id="search-wrap" style="display:flex;align-items:center;gap:4px;position:relative">
       <div style="position:relative;display:flex;align-items:center">
@@ -1394,6 +1397,82 @@ function scheduleRenderAll(){
 function updateZoomDisplay(){
   const el=document.getElementById('zoom-level');
   if(el&&document.activeElement!==el)el.value=Math.round(scale*100)+'%';
+}
+// Smooth zoom (used by the C key and the typed zoom-level box). Jumping
+// straight to the new zoom level makes it hard to tell which node you were
+// looking at, so the zoom is eased over a few hundred milliseconds instead.
+// Every frame applies a *relative* zoom about the viewport centre to whatever
+// the current pan/scale is, so other navigation (WASD, N/B, F, Z ...) during
+// the animation composes with it instead of fighting it. Anything that sets
+// the scale directly (wheel, arrow-key zoom, a new animation) cancels it.
+let _zoomAnim=null;
+function cancelZoomAnim(){
+  if(_zoomAnim){cancelAnimationFrame(_zoomAnim.raf);_zoomAnim=null;}
+}
+function zoomAboutCenter(newScale){
+  const rect=canvas.getBoundingClientRect();
+  const mx=rect.width/2, my=rect.height/2;
+  panX=mx-(mx-panX)*(newScale/scale);
+  panY=my-(my-panY)*(newScale/scale);
+  scale=newScale;
+  renderAll();
+}
+function animateZoomTo(targetScale){
+  cancelZoomAnim();
+  const s0=scale;
+  if(Math.abs(targetScale-s0)<1e-6)return;
+  // The in-app toggle decides; the OS "reduce motion" setting is deliberately
+  // NOT consulted (users who enable it for other reasons still get this).
+  if(!zoomAnimEnabled){
+    zoomAboutCenter(targetScale);
+    return;
+  }
+  const ratio=targetScale/s0;
+  // Longer for bigger changes (e.g. 100% <-> 1%), but never sluggish.
+  const dur=Math.min(900,400+60*Math.abs(Math.log2(ratio)));
+  const t0=performance.now();
+  const anim={target:targetScale,raf:0};
+  _zoomAnim=anim;
+  const step=now=>{
+    if(_zoomAnim!==anim)return;
+    const t=Math.min(1,Math.max(0,(now-t0)/dur));
+    // easeInOutCubic on the exponent => constant perceived zoom speed
+    const e=t<0.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+    zoomAboutCenter(t>=1?targetScale:s0*Math.pow(ratio,e));
+    if(t<1)anim.raf=requestAnimationFrame(step);
+    else _zoomAnim=null;
+  };
+  anim.raf=requestAnimationFrame(step);
+}
+// In-app on/off switch for the smooth zoom (button next to the zoom box).
+// Remembered in localStorage; default ON.
+let zoomAnimEnabled=true;
+try{zoomAnimEnabled=localStorage.getItem('mindmap-zoom-anim')!=='off';}catch(e){}
+function updateZoomAnimButton(){
+  const b=document.getElementById('btn-zoom-anim');
+  if(!b)return;
+  b.classList.toggle('active',zoomAnimEnabled);
+  b.setAttribute('aria-pressed',zoomAnimEnabled?'true':'false');
+  b.title='ズームのアニメーション：'+(zoomAnimEnabled?'ON':'OFF')+'（クリックで切り替え／Cキーと拡大率の直接入力が対象）';
+}
+function toggleZoomAnim(){
+  zoomAnimEnabled=!zoomAnimEnabled;
+  try{localStorage.setItem('mindmap-zoom-anim',zoomAnimEnabled?'on':'off');}catch(e){}
+  // Turning it off mid-animation: finish the zoom right away.
+  if(!zoomAnimEnabled&&_zoomAnim){
+    const t=_zoomAnim.target;
+    cancelZoomAnim();
+    zoomAboutCenter(t);
+  }
+  updateZoomAnimButton();
+  showToast(zoomAnimEnabled?'🎞 ズームのアニメーションをONにしました':'🎞 ズームのアニメーションをOFFにしました（Cキー・拡大率の入力は即時に切り替わります）');
+}
+{
+  const zb=document.getElementById('btn-zoom-anim');
+  if(zb){
+    zb.addEventListener('click',()=>{toggleZoomAnim();zb.blur();});
+    updateZoomAnimButton();
+  }
 }
 // Point exactly ON the drawn quadratic bezier, at the arc-length midpoint of
 // the portion that's actually visible (i.e. excluding the parts hidden
@@ -2816,6 +2895,7 @@ canvas.addEventListener('wheel',e=>{
   // underneath it.
   if(isAnyModalOpen())return;
   e.preventDefault();
+  cancelZoomAnim();
   const rect=canvas.getBoundingClientRect();
   const mx=e.clientX-rect.left;
   const my=e.clientY-rect.top;
@@ -2835,13 +2915,9 @@ function applyZoomFromInput(){
   const num=parseFloat((el.value||'').replace('%','').trim());
   if(isNaN(num)){updateZoomDisplay();return;}
   const clamped=Math.min(400,Math.max(1,num));
-  const rect=canvas.getBoundingClientRect();
-  const mx=rect.width/2, my=rect.height/2;
-  const newScale=clamped/100;
-  panX=mx-(mx-panX)*(newScale/scale);
-  panY=my-(my-panY)*(newScale/scale);
-  scale=newScale;
-  renderAll();
+  animateZoomTo(clamped/100);
+  // Re-sync the box right away if the value is unchanged / was clamped.
+  updateZoomDisplay();
 }
 {
   const zoomLevelInput=document.getElementById('zoom-level');
@@ -3194,17 +3270,15 @@ document.addEventListener('keydown',e=>{
   // C: reset zoom to 100% (centered on viewport)
   if(e.key==='c'&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey){
     e.preventDefault();
-    const rect=canvas.getBoundingClientRect();
-    const mx=rect.width/2, my=rect.height/2;
-    // Toggle: from anywhere else, jump to 100%; pressing it again while
-    // already at 100% jumps to 1% instead, as a quick way to see the whole
-    // map at a glance without manually zooming all the way out.
-    const atFullZoom=Math.abs(scale-1)<0.001;
+    // Toggle: from anywhere else, go to 100%; pressing it again while
+    // already at 100% goes to 1% instead, as a quick way to see the whole
+    // map at a glance without manually zooming all the way out. The zoom is
+    // animated; if one is still running, toggle relative to where it is
+    // heading rather than to the in-between scale.
+    const curTarget=_zoomAnim?_zoomAnim.target:scale;
+    const atFullZoom=Math.abs(curTarget-1)<0.001;
     const newScale=atFullZoom?0.01:1;
-    panX=mx-(mx-panX)*(newScale/scale);
-    panY=my-(my-panY)*(newScale/scale);
-    scale=newScale;
-    renderAll();
+    animateZoomTo(newScale);
     showToast(atFullZoom?'🔍 拡大率を1%にしました':'🔍 拡大率を100%に戻しました');
   }
 
@@ -3414,6 +3488,7 @@ document.addEventListener('keydown',e=>{
   // ↑ / ↓ (no modifiers): zoom in / out (around the viewport center)
   if((e.key==='ArrowUp'||e.key==='ArrowDown')&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey){
     e.preventDefault();
+    cancelZoomAnim();
     const rect=canvas.getBoundingClientRect();
     const mx=rect.width/2, my=rect.height/2;
     const zoomFactor=e.key==='ArrowUp'?1.15:1/1.15;
@@ -4420,6 +4495,82 @@ function updateZoomDisplay(){
   const el=document.getElementById('zoom-level');
   if(el&&document.activeElement!==el)el.value=Math.round(scale*100)+'%';
 }
+// Smooth zoom (used by the C key and the typed zoom-level box). Jumping
+// straight to the new zoom level makes it hard to tell which node you were
+// looking at, so the zoom is eased over a few hundred milliseconds instead.
+// Every frame applies a *relative* zoom about the viewport centre to whatever
+// the current pan/scale is, so other navigation (WASD, N/B, F, Z ...) during
+// the animation composes with it instead of fighting it. Anything that sets
+// the scale directly (wheel, arrow-key zoom, a new animation) cancels it.
+let _zoomAnim=null;
+function cancelZoomAnim(){
+  if(_zoomAnim){cancelAnimationFrame(_zoomAnim.raf);_zoomAnim=null;}
+}
+function zoomAboutCenter(newScale){
+  const rect=canvas.getBoundingClientRect();
+  const mx=rect.width/2, my=rect.height/2;
+  panX=mx-(mx-panX)*(newScale/scale);
+  panY=my-(my-panY)*(newScale/scale);
+  scale=newScale;
+  renderAll();
+}
+function animateZoomTo(targetScale){
+  cancelZoomAnim();
+  const s0=scale;
+  if(Math.abs(targetScale-s0)<1e-6)return;
+  // The in-app toggle decides; the OS "reduce motion" setting is deliberately
+  // NOT consulted (users who enable it for other reasons still get this).
+  if(!zoomAnimEnabled){
+    zoomAboutCenter(targetScale);
+    return;
+  }
+  const ratio=targetScale/s0;
+  // Longer for bigger changes (e.g. 100% <-> 1%), but never sluggish.
+  const dur=Math.min(900,400+60*Math.abs(Math.log2(ratio)));
+  const t0=performance.now();
+  const anim={target:targetScale,raf:0};
+  _zoomAnim=anim;
+  const step=now=>{
+    if(_zoomAnim!==anim)return;
+    const t=Math.min(1,Math.max(0,(now-t0)/dur));
+    // easeInOutCubic on the exponent => constant perceived zoom speed
+    const e=t<0.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+    zoomAboutCenter(t>=1?targetScale:s0*Math.pow(ratio,e));
+    if(t<1)anim.raf=requestAnimationFrame(step);
+    else _zoomAnim=null;
+  };
+  anim.raf=requestAnimationFrame(step);
+}
+// In-app on/off switch for the smooth zoom (button next to the zoom box).
+// Remembered in localStorage; default ON.
+let zoomAnimEnabled=true;
+try{zoomAnimEnabled=localStorage.getItem('mindmap-zoom-anim')!=='off';}catch(e){}
+function updateZoomAnimButton(){
+  const b=document.getElementById('btn-zoom-anim');
+  if(!b)return;
+  b.classList.toggle('active',zoomAnimEnabled);
+  b.setAttribute('aria-pressed',zoomAnimEnabled?'true':'false');
+  b.title='ズームのアニメーション：'+(zoomAnimEnabled?'ON':'OFF')+'（クリックで切り替え／Cキーと拡大率の直接入力が対象）';
+}
+function toggleZoomAnim(){
+  zoomAnimEnabled=!zoomAnimEnabled;
+  try{localStorage.setItem('mindmap-zoom-anim',zoomAnimEnabled?'on':'off');}catch(e){}
+  // Turning it off mid-animation: finish the zoom right away.
+  if(!zoomAnimEnabled&&_zoomAnim){
+    const t=_zoomAnim.target;
+    cancelZoomAnim();
+    zoomAboutCenter(t);
+  }
+  updateZoomAnimButton();
+  showToast(zoomAnimEnabled?'🎞 ズームのアニメーションをONにしました':'🎞 ズームのアニメーションをOFFにしました（Cキー・拡大率の入力は即時に切り替わります）');
+}
+{
+  const zb=document.getElementById('btn-zoom-anim');
+  if(zb){
+    zb.addEventListener('click',()=>{toggleZoomAnim();zb.blur();});
+    updateZoomAnimButton();
+  }
+}
 
 function edgeLabelPoint(p0x,p0y,p1x,p1y,p2x,p2y,rectA,rectB){
   const samples=60;
@@ -4759,6 +4910,7 @@ function isAnyModalOpen(){
 canvas.addEventListener('wheel',e=>{
   if(isAnyModalOpen())return;
   e.preventDefault();
+  cancelZoomAnim();
   const rect=canvas.getBoundingClientRect();
   const mx=e.clientX-rect.left,my=e.clientY-rect.top;
   const z=e.deltaY<0?1.1:1/1.1;
@@ -4770,13 +4922,9 @@ function applyZoomFromInput(){
   const num=parseFloat((el.value||'').replace('%','').trim());
   if(isNaN(num)){updateZoomDisplay();return;}
   const clamped=Math.min(400,Math.max(1,num));
-  const rect=canvas.getBoundingClientRect();
-  const mx=rect.width/2, my=rect.height/2;
-  const newScale=clamped/100;
-  panX=mx-(mx-panX)*(newScale/scale);
-  panY=my-(my-panY)*(newScale/scale);
-  scale=newScale;
-  renderAll();
+  animateZoomTo(clamped/100);
+  // Re-sync the box right away if the value is unchanged / was clamped.
+  updateZoomDisplay();
 }
 {
   const zoomLevelInput=document.getElementById('zoom-level');
@@ -5126,17 +5274,15 @@ document.addEventListener('keydown',e=>{
   }
   if(e.key==='c'&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey){
     e.preventDefault();
-    const rect=canvas.getBoundingClientRect();
-    const mx=rect.width/2, my=rect.height/2;
-    // Toggle: from anywhere else, jump to 100%; pressing it again while
-    // already at 100% jumps to 1% instead, as a quick way to see the whole
-    // map at a glance without manually zooming all the way out.
-    const atFullZoom=Math.abs(scale-1)<0.001;
+    // Toggle: from anywhere else, go to 100%; pressing it again while
+    // already at 100% goes to 1% instead, as a quick way to see the whole
+    // map at a glance without manually zooming all the way out. The zoom is
+    // animated; if one is still running, toggle relative to where it is
+    // heading rather than to the in-between scale.
+    const curTarget=_zoomAnim?_zoomAnim.target:scale;
+    const atFullZoom=Math.abs(curTarget-1)<0.001;
     const newScale=atFullZoom?0.01:1;
-    panX=mx-(mx-panX)*(newScale/scale);
-    panY=my-(my-panY)*(newScale/scale);
-    scale=newScale;
-    renderAll();
+    animateZoomTo(newScale);
     showToast(atFullZoom?'🔍 拡大率を1%にしました':'🔍 拡大率を100%に戻しました');
   }
   if(e.key==='x'&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey){
@@ -5324,6 +5470,8 @@ button.active{background:var(--color-background-info);border-color:var(--color-b
 .attr-status-chip{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;background:rgba(33,150,243,.12);border:0.5px solid var(--color-border-secondary)}
 .attr-empty{color:var(--color-text-tertiary);font-size:12px;font-style:italic}
 .attr-modal-actions{display:flex;justify-content:flex-end;margin-top:10px}
+.zoom-anim-btn{font-size:11px;padding:5px 8px}
+.zoom-anim-btn.active{background:var(--color-background-info);border-color:var(--color-border-info);color:var(--color-text-info)}
 </style>
 </head>
 <body>
@@ -5408,6 +5556,7 @@ button.active{background:var(--color-background-info);border-color:var(--color-b
       </div>
     </div>
     <input id="zoom-level" type="text" inputmode="numeric" value="100%" title="現在の拡大率（クリックして直接入力：1%〜400%）" style="width:56px;text-align:center;font-family:var(--font-sans);font-size:12px;padding:5px 4px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-primary);color:var(--color-text-primary);outline:none;cursor:text">
+    <button id="btn-zoom-anim" class="zoom-anim-btn active" type="button" aria-pressed="true" title="ズームのアニメーション：ON（クリックで切り替え／Cキーと拡大率の直接入力が対象）">アニメ</button>
     <span id="hint">🔒 閲覧専用</span>
   </div>
 </div>
