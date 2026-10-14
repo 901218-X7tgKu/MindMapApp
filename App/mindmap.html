@@ -66,7 +66,6 @@ html,body{height:100%;background:var(--color-background-secondary);color:var(--c
 #canvas.grabbing{cursor:grabbing}
 #canvas.pan-lock .node-el,#canvas.pan-lock .img-node-el,#canvas.pan-lock .group-node-el{cursor:grab}
 #canvas.pan-lock.grabbing .node-el,#canvas.pan-lock.grabbing .img-node-el,#canvas.pan-lock.grabbing .group-node-el{cursor:grabbing}
-#canvas.connecting{cursor:crosshair}
 #canvas.dragover{outline:3px dashed var(--color-text-info);outline-offset:-4px;}
 #svg-layer{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:5}
 
@@ -258,7 +257,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | WASD: スクロール | Shift+S: スライド幅切替 </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.55</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.56</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -492,7 +491,6 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
     <button id="btn-redo" disabled title="Ctrl+Y"><i class="ti ti-arrow-forward-up"></i> Redo</button>
     <div class="sep"></div>
     <button id="btn-add"><i class="ti ti-plus"></i> ノード追加</button>
-    <button id="btn-connect"><i class="ti ti-arrow-right"></i> 接続</button>
     <button id="btn-add-img" title="画像ファイルを選択して追加"><i class="ti ti-photo-plus"></i> 画像追加</button>
     <input type="file" id="file-input" accept="image/*" style="display:none">
     <button id="btn-add-group" title="ノードや画像ノードをまとめて入れられる枠を追加（Ctrl+Shift+クリックでも追加可）"><i class="ti ti-border-corners"></i> グループ追加</button>
@@ -565,7 +563,6 @@ function getColors(){return isDark()?COLORS_DARK:COLORS;}
 //        {id, type:'image', x, y, src, comment}                    (image nodes)
 //        {id, type:'group', x, y, width, height, colorIdx}         (group nodes; groupId on members)
 let nodes=[], edges=[], selected=null;
-let connecting=false, connectFrom=null;       // toolbar connect mode (kept for btn-connect)
 let _dupJumpContent=null, _dupJumpIdx=0;      // Ctrl+Shift+click: cycle through nodes with same content
 let ctrlConnectPending=null;                  // ctrl+right-click connect
 let panX=0, panY=0, isPanning=false, didPan=false, panStart={x:0,y:0};
@@ -1960,7 +1957,7 @@ canvas.addEventListener('mousedown',e=>{
 canvas.addEventListener('auxclick',e=>{if(e.button===1)e.preventDefault();},true);
 let dragNode=null,dragOffset={x:0,y:0},didDrag=false,dragDescendants=[],dragExtraDescendants=[];
 function onNodeMouseDown(e,n){
-  if(connecting||e.shiftKey||(panLock&&!e.ctrlKey&&!e.metaKey))return;e.stopPropagation();if(e.button!==0)return;
+  if(e.shiftKey||(panLock&&!e.ctrlKey&&!e.metaKey))return;e.stopPropagation();if(e.button!==0)return;
   dragNode=n;didDrag=false;
   // 折り畳まれたノードは子孫が画面上に見えていないため、Ctrlを押していなくても
   // 子孫ごと連動して移動させる（気づかずに大きくずらしてしまうのを防ぐため）
@@ -2168,22 +2165,6 @@ function flushNudgeHistory(){
 let lastPlainClick={id:null,time:0};
 function onNodeClick(e,n){
   e.stopPropagation();
-  if(connecting){
-    if(connectFrom===null){connectFrom=n.id;}
-    else if(connectFrom!==n.id){
-      const exists=edges.find(ed=>(ed.from===connectFrom&&ed.to===n.id)||(ed.from===n.id&&ed.to===connectFrom));
-      if(!exists){
-        if(wouldCreateCycle(connectFrom,n.id)){
-          showToast('⚠ ループが生じるため接続できません');
-        } else {
-          edges.push({from:connectFrom,to:n.id});pushHistory();
-        }
-      }
-      connectFrom=null;connecting=false;canvas.classList.remove('connecting');
-      document.getElementById('btn-connect').classList.remove('active');renderEdges();
-    }
-    return;
-  }
   if((e.ctrlKey||e.metaKey)&&e.shiftKey){
     lastPlainClick={id:null,time:0};
     jumpToDuplicateNode(n);
@@ -2787,7 +2768,7 @@ canvas.addEventListener('mousedown',e=>{
     return;
   }
   const onNodeTarget=!!(e.target.closest('.node-el')||e.target.closest('.img-node-el')||e.target.closest('.group-node-el'));
-  if((e.shiftKey||(panLock&&onNodeTarget))&&!e.ctrlKey&&!e.metaKey&&!connecting){
+  if((e.shiftKey||(panLock&&onNodeTarget))&&!e.ctrlKey&&!e.metaKey){
     // Shift+drag (or any plain drag while pan-lock mode is on) pans the view even when starting on top of a node/group —
     // useful once groups cover most of the canvas and there's little truly
     // empty space left to grab. A plain Shift+click (no real movement)
@@ -2798,7 +2779,7 @@ canvas.addEventListener('mousedown',e=>{
     panStart={x:e.clientX-panX,y:e.clientY-panY};
     return;
   }
-  if(!connecting&&onEmptyCanvas){
+  if(onEmptyCanvas){
     selected=null;isPanning=true;didPan=false;canvas.classList.add('grabbing');
     panStart={x:e.clientX-panX,y:e.clientY-panY};renderAll();
   }
@@ -3115,11 +3096,6 @@ document.getElementById('btn-add').addEventListener('click',()=>{
   const x=(rect.width/2-panX)/scale+(Math.random()*100-50),y=(rect.height/2-panY)/scale+(Math.random()*80-40);
   const n=makeTextNode('新しいノード',x,y,Math.floor(Math.random()*COLORS.length));
   selected=n.id;pushHistory();renderAll();
-});
-document.getElementById('btn-connect').addEventListener('click',()=>{
-  connecting=!connecting;connectFrom=null;
-  canvas.classList.toggle('connecting',connecting);
-  document.getElementById('btn-connect').classList.toggle('active',connecting);
 });
 // file picker button
 document.getElementById('btn-add-img').addEventListener('click',()=>document.getElementById('file-input').click());
