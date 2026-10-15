@@ -142,6 +142,11 @@ html,body{height:100%;background:var(--color-background-secondary);color:var(--c
 #tag-status-overlay.closing{animation:overlayOut .2s var(--ease-out) both}
 #tag-status-overlay.show>div{animation:modalPopIn .45s var(--ease-bounce) both;box-shadow:0 24px 60px rgba(0,0,0,.25)}
 #tag-status-overlay.closing>div{animation:modalPopOut .2s var(--ease-out) both}
+#url-choice-overlay{display:none;position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.45);backdrop-filter:blur(2px);z-index:250;align-items:center;justify-content:center}
+#url-choice-overlay.show{display:flex;animation:overlayIn .25s var(--ease-out) both}
+#url-choice-overlay.closing{animation:overlayOut .2s var(--ease-out) both}
+#url-choice-overlay.show>div{animation:modalPopIn .45s var(--ease-bounce) both;box-shadow:0 24px 60px rgba(0,0,0,.25)}
+#url-choice-overlay.closing>div{animation:modalPopOut .2s var(--ease-out) both}
 
 /* Drop hint */
 #drop-hint{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;text-align:center;color:var(--color-text-tertiary);font-size:13px;opacity:0;transition:opacity .2s}
@@ -252,6 +257,10 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
 .private-badge{position:absolute;top:-8px;right:-8px;width:20px;height:20px;border-radius:50%;background:var(--color-background-primary);border:1px solid var(--color-border-secondary);display:flex;align-items:center;justify-content:center;font-size:11px;box-shadow:0 1px 3px rgba(0,0,0,.15);pointer-events:none;}
 .zoom-anim-btn{font-size:11px;padding:5px 8px}
 .zoom-anim-btn.active{background:var(--color-background-info);border-color:var(--color-border-info);color:var(--color-text-info)}
+#url-choice-list{display:flex;flex-direction:column;gap:6px}
+.url-choice-item{display:flex;align-items:flex-start;gap:10px;width:100%;text-align:left;padding:8px 10px;font-size:12px;line-height:1.45}
+.url-choice-item .num{flex:0 0 auto;min-width:18px;height:18px;border-radius:9px;background:var(--color-background-info);color:var(--color-text-info);font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center}
+.url-choice-item .txt{flex:1 1 auto;min-width:0;word-break:break-all}
 </style>
 </head>
 <body>
@@ -259,7 +268,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | WASD: スクロール | Shift+S: スライド幅切替 </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.57</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.58</span>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
@@ -318,6 +327,15 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
         <p style="font-size:12px;color:var(--color-text-secondary)" id="multi-open-desc"></p>
         <div id="multi-open-list" style="display:flex;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto"></div>
         <button id="multi-open-close" style="justify-content:center;color:var(--color-text-tertiary)">閉じる</button>
+      </div>
+    </div>
+    <!-- URL chooser: shown when a node's URL attribute holds several URLs ("URL1 & URL2") -->
+    <div id="url-choice-overlay">
+      <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-lg);padding:24px;display:flex;flex-direction:column;gap:12px;min-width:320px;max-width:520px;max-height:80vh;overflow-y:auto">
+        <p style="font-size:13px;font-weight:500">🔗 開くURLを選択</p>
+        <p id="url-choice-hint" style="font-size:11px;color:var(--color-text-tertiary)"></p>
+        <div id="url-choice-list"></div>
+        <div style="display:flex;justify-content:flex-end"><button id="url-choice-close" type="button">キャンセル</button></div>
       </div>
     </div>
     <!-- Tag/Status overview modal: right-click on empty canvas area -->
@@ -406,8 +424,8 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
           <div class="node-modal-col node-modal-col-attrs" id="node-modal-col-attrs">
             <p class="attr-label" id="node-modal-group-title-label"><span>タイトル</span><span class="hint">グループノード左上に表示されます</span></p>
             <input type="text" id="node-modal-group-title" class="attr-input" placeholder="グループの名前（任意）" autocomplete="off">
-            <p class="attr-label"><span>URL</span><span class="hint">Ctrl+Shift+右クリックで開く／未設定なら反応しません</span></p>
-            <input type="text" id="node-modal-url" class="attr-input" placeholder="https://example.com または ./page.html" autocomplete="off">
+            <p class="attr-label"><span>URL</span><span class="hint">Ctrl+Shift+右クリックで開く／複数は「URL1 &amp; URL2」／未設定なら反応しません</span></p>
+            <input type="text" id="node-modal-url" class="attr-input" placeholder="https://example.com または ./page.html（複数: URL1 &amp; URL2）" autocomplete="off">
             <p class="attr-label"><span>タグ</span><span class="hint">複数可・#で区切る（例: #タグA#タグB）</span></p>
             <input type="text" id="node-modal-tags" class="attr-input" placeholder="#タグA#タグB#タグC" autocomplete="off">
             <p class="attr-label"><span>ステータス</span><span class="hint">1つのみ設定可</span></p>
@@ -2455,7 +2473,7 @@ function closeOverlay(el, delay){
 // these overlays are DOM descendants of #canvas, so clicks on their backdrop
 // still bubble up to canvas's own mousedown listener unless explicitly guarded.
 function isAnyModalOpen(){
-  return ['drop-choice-overlay','multi-open-overlay','tag-status-overlay','save-modal','node-modal','edge-modal']
+  return ['drop-choice-overlay','multi-open-overlay','tag-status-overlay','url-choice-overlay','save-modal','node-modal','edge-modal']
     .some(id=>{const el=document.getElementById(id);return el&&el.classList.contains('show');});
 }
 function showDropChoice(data, filename){
@@ -2517,10 +2535,84 @@ function wouldCreateCycle(fromId, toId){
   return false;
 }
 
+// ── Multiple URLs: "URL1 & URL2" ─────────────────────────────
+// The URL attribute may hold several URLs separated by " & " (an ampersand
+// surrounded by whitespace). An "&" inside a URL (e.g. a query string like
+// ?a=1&b=2) has no surrounding whitespace, so it is never treated as a separator.
+function splitUrlList(str){
+  const s=String(str||'');
+  const isSp=c=>c.trim()==='';
+  const out=[];
+  let cur='';
+  for(let i=0;i<s.length;i++){
+    const c=s[i];
+    if(c==='&'&&i>0&&i<s.length-1&&isSp(s[i-1])&&isSp(s[i+1])){
+      out.push(cur.trim());cur='';continue;
+    }
+    cur+=c;
+  }
+  out.push(cur.trim());
+  return out.filter(u=>u);
+}
+// Two or more URLs: ask which one to open (click, number keys 1-9, or Up/Down + Enter).
+function showUrlChoice(urls){
+  const ov=document.getElementById('url-choice-overlay');
+  const list=document.getElementById('url-choice-list');
+  list.textContent='';
+  urls.forEach((u,i)=>{
+    const b=document.createElement('button');
+    b.type='button';b.className='url-choice-item';b.title=u;
+    const num=document.createElement('span');num.className='num';num.textContent=String(i+1);
+    const txt=document.createElement('span');txt.className='txt';txt.textContent=u;
+    b.appendChild(num);b.appendChild(txt);
+    b.addEventListener('click',()=>{closeUrlChoice();openSingleUrl(u);});
+    list.appendChild(b);
+  });
+  document.getElementById('url-choice-hint').textContent=urls.length+'個のURLが登録されています（数字キー、または↑↓とEnterでも選べます）';
+  ov.classList.remove('closing');
+  ov.classList.add('show');
+  // Focus after the current key event has finished, so the Enter/right-click that
+  // opened this dialog can't also "click" the first button.
+  setTimeout(()=>{const f=list.querySelector('button');if(f)f.focus();},0);
+}
+function closeUrlChoice(){closeOverlay(document.getElementById('url-choice-overlay'));}
+document.getElementById('url-choice-close').addEventListener('click',closeUrlChoice);
+document.getElementById('url-choice-overlay').addEventListener('click',e=>{
+  if(e.target.id==='url-choice-overlay')closeUrlChoice();
+});
+document.addEventListener('keydown',e=>{
+  const ov=document.getElementById('url-choice-overlay');
+  if(!ov||!ov.classList.contains('show')||ov.classList.contains('closing'))return;
+  const items=Array.prototype.slice.call(ov.querySelectorAll('.url-choice-item'));
+  if(e.key==='Escape'){e.preventDefault();e.stopPropagation();closeUrlChoice();return;}
+  if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+    e.preventDefault();e.stopPropagation();
+    const idx=items.indexOf(document.activeElement);
+    const next=e.key==='ArrowDown'?(idx+1)%items.length:(idx<=0?items.length-1:idx-1);
+    items[next].focus();
+    return;
+  }
+  if(/^[1-9]$/.test(e.key)){
+    const t=items[Number(e.key)-1];
+    if(t){e.preventDefault();e.stopPropagation();t.click();return;}
+  }
+  // Enter / Space act natively on the focused button; every other key is kept from
+  // reaching the app's shortcuts (WASD, N/B, Enter-to-edit ...) behind the dialog.
+  e.stopPropagation();
+},true);
+
 function openNodeLink(n){
   // v2.00〜: リンク先はノードのURL属性のみを参照する。
   // URL属性が未設定のノードは何も起こらない（旧: ノード本文をそのままリンクとして開く機能は廃止）。
-  const url=(n.url||'').trim();
+  // 「URL1 & URL2」のように複数登録されている場合は、開くURLを選ぶダイアログを出す。
+  const urls=splitUrlList(n.url);
+  if(urls.length===0)return;
+  if(urls.length===1){openSingleUrl(urls[0]);return;}
+  showUrlChoice(urls);
+}
+// Opens one URL: absolute URLs as-is, otherwise tried as a relative path first.
+function openSingleUrl(url){
+  url=(url||'').trim();
   if(!url)return;
 
   // 絶対URLの場合はそのまま開く
@@ -4316,9 +4408,82 @@ function applyHoverHighlight(){
   });
 }
 
+// ── Multiple URLs: "URL1 & URL2" ─────────────────────────────
+// The URL attribute may hold several URLs separated by " & " (an ampersand
+// surrounded by whitespace). An "&" inside a URL (e.g. a query string like
+// ?a=1&b=2) has no surrounding whitespace, so it is never treated as a separator.
+function splitUrlList(str){
+  const s=String(str||'');
+  const isSp=c=>c.trim()==='';
+  const out=[];
+  let cur='';
+  for(let i=0;i<s.length;i++){
+    const c=s[i];
+    if(c==='&'&&i>0&&i<s.length-1&&isSp(s[i-1])&&isSp(s[i+1])){
+      out.push(cur.trim());cur='';continue;
+    }
+    cur+=c;
+  }
+  out.push(cur.trim());
+  return out.filter(u=>u);
+}
+// Two or more URLs: ask which one to open (click, number keys 1-9, or Up/Down + Enter).
+function showUrlChoice(urls){
+  const ov=document.getElementById('url-choice-overlay');
+  const list=document.getElementById('url-choice-list');
+  list.textContent='';
+  urls.forEach((u,i)=>{
+    const b=document.createElement('button');
+    b.type='button';b.className='url-choice-item';b.title=u;
+    const num=document.createElement('span');num.className='num';num.textContent=String(i+1);
+    const txt=document.createElement('span');txt.className='txt';txt.textContent=u;
+    b.appendChild(num);b.appendChild(txt);
+    b.addEventListener('click',()=>{closeUrlChoice();openSingleUrl(u);});
+    list.appendChild(b);
+  });
+  document.getElementById('url-choice-hint').textContent=urls.length+'個のURLが登録されています（数字キー、または↑↓とEnterでも選べます）';
+  ov.classList.remove('closing');
+  ov.classList.add('show');
+  // Focus after the current key event has finished, so the Enter/right-click that
+  // opened this dialog can't also "click" the first button.
+  setTimeout(()=>{const f=list.querySelector('button');if(f)f.focus();},0);
+}
+function closeUrlChoice(){document.getElementById('url-choice-overlay').classList.remove('show');}
+document.getElementById('url-choice-close').addEventListener('click',closeUrlChoice);
+document.getElementById('url-choice-overlay').addEventListener('click',e=>{
+  if(e.target.id==='url-choice-overlay')closeUrlChoice();
+});
+document.addEventListener('keydown',e=>{
+  const ov=document.getElementById('url-choice-overlay');
+  if(!ov||!ov.classList.contains('show')||ov.classList.contains('closing'))return;
+  const items=Array.prototype.slice.call(ov.querySelectorAll('.url-choice-item'));
+  if(e.key==='Escape'){e.preventDefault();e.stopPropagation();closeUrlChoice();return;}
+  if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+    e.preventDefault();e.stopPropagation();
+    const idx=items.indexOf(document.activeElement);
+    const next=e.key==='ArrowDown'?(idx+1)%items.length:(idx<=0?items.length-1:idx-1);
+    items[next].focus();
+    return;
+  }
+  if(/^[1-9]$/.test(e.key)){
+    const t=items[Number(e.key)-1];
+    if(t){e.preventDefault();e.stopPropagation();t.click();return;}
+  }
+  // Enter / Space act natively on the focused button; every other key is kept from
+  // reaching the app's shortcuts (WASD, N/B, Enter-to-edit ...) behind the dialog.
+  e.stopPropagation();
+},true);
+
 function openNodeUrl(n){
-  const url=(n.url||'').trim();
-  if(!url)return; // URL属性が未設定のノードは無反応
+  // URL属性が未設定のノードは無反応。複数登録（URL1 & URL2）なら選択ダイアログ。
+  const urls=splitUrlList(n.url);
+  if(urls.length===0)return;
+  if(urls.length===1){openSingleUrl(urls[0]);return;}
+  showUrlChoice(urls);
+}
+function openSingleUrl(url){
+  url=(url||'').trim();
+  if(!url)return;
   const isAbs=new RegExp('^[a-z][a-z0-9+.-]*://','i').test(url);
   if(isAbs){
     window.open(url,'_blank','noopener,noreferrer');
@@ -4902,7 +5067,7 @@ canvas.addEventListener('mouseup',()=>{
   if(didPan)renderAll();
 });
 function isAnyModalOpen(){
-  return ['attr-modal','tag-status-overlay'].some(id=>{
+  return ['attr-modal','tag-status-overlay','url-choice-overlay'].some(id=>{
     const el=document.getElementById(id);
     return el&&el.classList.contains('show');
   });
@@ -5472,6 +5637,10 @@ button.active{background:var(--color-background-info);border-color:var(--color-b
 .attr-modal-actions{display:flex;justify-content:flex-end;margin-top:10px}
 .zoom-anim-btn{font-size:11px;padding:5px 8px}
 .zoom-anim-btn.active{background:var(--color-background-info);border-color:var(--color-border-info);color:var(--color-text-info)}
+#url-choice-list{display:flex;flex-direction:column;gap:6px}
+.url-choice-item{display:flex;align-items:flex-start;gap:10px;width:100%;text-align:left;padding:8px 10px;font-size:12px;line-height:1.45}
+.url-choice-item .num{flex:0 0 auto;min-width:18px;height:18px;border-radius:9px;background:var(--color-background-info);color:var(--color-text-info);font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center}
+.url-choice-item .txt{flex:1 1 auto;min-width:0;word-break:break-all}
 </style>
 </head>
 <body>
@@ -5522,6 +5691,15 @@ button.active{background:var(--color-background-info);border-color:var(--color-b
         <div id="attr-modal-tags"></div>
         <div id="attr-modal-status"></div>
         <div class="attr-modal-actions"><button id="attr-modal-close">閉じる</button></div>
+      </div>
+    </div>
+    <!-- URL chooser: shown when a node's URL attribute holds several URLs ("URL1 & URL2") -->
+    <div id="url-choice-overlay" class="attr-modal-overlay">
+      <div class="attr-modal-box" style="width:420px;max-width:92vw;max-height:80vh;overflow-y:auto">
+        <h3>🔗 開くURLを選択</h3>
+        <p id="url-choice-hint" style="font-size:11px;color:var(--color-text-tertiary);margin:0 0 8px"></p>
+        <div id="url-choice-list"></div>
+        <div class="attr-modal-actions"><button id="url-choice-close" type="button">キャンセル</button></div>
       </div>
     </div>
     <!-- Tag/Status overview modal (right-click on empty canvas area) -->
