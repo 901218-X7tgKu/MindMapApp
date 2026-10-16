@@ -267,9 +267,10 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
 <div id="app">
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
-    <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | WASD: スクロール | Shift+S: スライド幅切替 </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.58</span>
-    <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:8px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
+    <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | C: 拡大率を100%に | WASD: スクロール </span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.59</span>
+    <button id="btn-zoom-anim" class="zoom-anim-btn active" type="button" aria-pressed="true" style="margin-left:8px;padding:4px 10px;font-size:12px" title="ズームのアニメーション：ON（クリックで切り替え／Cキーと拡大率の直接入力が対象）">アニメ</button>
+    <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:6px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
     </button>
@@ -529,7 +530,6 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
     <button id="btn-export"><i class="ti ti-file-export"></i> ファイル</button>
     <div class="sep"></div>
     <input id="zoom-level" type="text" inputmode="numeric" value="100%" title="現在の拡大率（クリックして直接入力：1%〜400%）" style="width:56px;text-align:center;font-family:var(--font-sans);font-size:12px;padding:5px 4px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-primary);color:var(--color-text-primary);outline:none;cursor:text">
-    <button id="btn-zoom-anim" class="zoom-anim-btn active" type="button" aria-pressed="true" title="ズームのアニメーション：ON（クリックで切り替え／Cキーと拡大率の直接入力が対象）">アニメ</button>
     <div class="sep"></div>
     <div id="search-wrap" style="display:flex;align-items:center;gap:4px;position:relative">
       <div style="position:relative;display:flex;align-items:center">
@@ -5647,8 +5647,9 @@ button.active{background:var(--color-background-info);border-color:var(--color-b
 <div id="app">
   <div id="header">
     <h1>🌐 ${escHtmlStr(title)}</h1>
-    <span style="font-size:11px;color:var(--color-text-tertiary)">ダブルクリック: 展開/折り畳み | Ctrl+Shift+右クリック: URLを開く | WASD: スクロール | Shift+S: スライド幅切替 | N/B: 次/前の接続グループへ | Z: 最も若いIDのノードを中央へ | C: 拡大率を100%に | Ctrl+Shift+クリック: 同じ内容のノードへジャンプ</span>
-    <button id="btn-theme" style="margin-left:8px;padding:4px 10px"><i id="theme-icon" class="ti ti-moon"></i> <span id="theme-label">ダーク</span></button>
+    <span style="font-size:11px;color:var(--color-text-tertiary)">ダブルクリック: 展開/折り畳み | Ctrl+Shift+右クリック: URLを開く | WASD: スクロール | N/B: 次/前の接続グループへ | C: 拡大率を100%に | Ctrl+Shift+クリック: 同じ内容のノードへジャンプ</span>
+    <button id="btn-zoom-anim" class="zoom-anim-btn active" type="button" aria-pressed="true" style="margin-left:8px;padding:4px 10px;font-size:12px" title="ズームのアニメーション：ON（クリックで切り替え／Cキーと拡大率の直接入力が対象）">アニメ</button>
+    <button id="btn-theme" style="margin-left:6px;padding:4px 10px"><i id="theme-icon" class="ti ti-moon"></i> <span id="theme-label">ダーク</span></button>
   </div>
   <div id="canvas">
     <svg id="svg-layer">
@@ -5734,7 +5735,6 @@ button.active{background:var(--color-background-info);border-color:var(--color-b
       </div>
     </div>
     <input id="zoom-level" type="text" inputmode="numeric" value="100%" title="現在の拡大率（クリックして直接入力：1%〜400%）" style="width:56px;text-align:center;font-family:var(--font-sans);font-size:12px;padding:5px 4px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-primary);color:var(--color-text-primary);outline:none;cursor:text">
-    <button id="btn-zoom-anim" class="zoom-anim-btn active" type="button" aria-pressed="true" title="ズームのアニメーション：ON（クリックで切り替え／Cキーと拡大率の直接入力が対象）">アニメ</button>
     <span id="hint">🔒 閲覧専用</span>
   </div>
 </div>
