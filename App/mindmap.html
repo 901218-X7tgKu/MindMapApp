@@ -268,7 +268,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | C: 拡大率を100%に | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.59</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.60</span>
     <button id="btn-zoom-anim" class="zoom-anim-btn active" type="button" aria-pressed="true" style="margin-left:8px;padding:4px 10px;font-size:12px" title="ズームのアニメーション：ON（クリックで切り替え／Cキーと拡大率の直接入力が対象）">アニメ</button>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:6px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
@@ -1416,6 +1416,26 @@ function updateZoomDisplay(){
   const el=document.getElementById('zoom-level');
   if(el&&document.activeElement!==el)el.value=Math.round(scale*100)+'%';
 }
+// On-screen size of a node element for edge geometry. getBoundingClientRect()
+// includes CSS transforms, and a node that was just created is still running
+// its "spawn" pop-in animation (scale .55 -> 1.06 -> 1). Edges drawn in that
+// window were clipped against a shrunken node, so right after a file load, at
+// startup, or after adding a node their ends sat in the wrong place until
+// something else triggered a redraw. Dividing the animation's scale back out
+// gives the node's real size from the very first draw. Only nodes that are
+// still animating are checked, so the normal path costs nothing extra.
+function nodeScreenSize(el){
+  const r=el.getBoundingClientRect();
+  let w=r.width,h=r.height;
+  if(el.classList.contains('spawn-in')){
+    const t=getComputedStyle(el).transform;
+    if(t&&t!=='none'){
+      const m=new DOMMatrix(t);
+      if(m.a>0.01&&m.d>0.01){w/=m.a;h/=m.d;}
+    }
+  }
+  return {width:w,height:h};
+}
 // Smooth zoom (used by the C key and the typed zoom-level box). Jumping
 // straight to the new zoom level makes it hard to tell which node you were
 // looking at, so the zoom is eased over a few hundred milliseconds instead.
@@ -1705,7 +1725,7 @@ function renderEdges(){
     const tEl=document.getElementById('node-'+targetNode.id);
     let rect=null, srect=null;
     if(tEl){
-      const r=tEl.getBoundingClientRect();
+      const r=nodeScreenSize(tEl);
       // Only give an arrowhead room to sit just outside the node (+4px); a
       // plain line with no marker should stop exactly at the node's edge —
       // where it always used to disappear behind an opaque node — instead
@@ -1720,7 +1740,7 @@ function renderEdges(){
     if(sourceNode&&!fixedEnd){
       const sEl=document.getElementById('node-'+sourceNode.id);
       if(sEl){
-        const sr=sEl.getBoundingClientRect();
+        const sr=nodeScreenSize(sEl);
         // No padding here: no arrowhead is ever drawn at a source, so the
         // curve should stop flush with the node's own edge, not short of it.
         // Same half-stroke-width safety margin as the destination side,
@@ -1821,7 +1841,7 @@ function renderEdges(){
     function reach(nodeId){
       const el=document.getElementById('node-'+nodeId);
       if(!el)return 0;
-      const r=el.getBoundingClientRect();
+      const r=nodeScreenSize(el);
       const hw=r.width/2+4, hh=r.height/2+4;
       if(Math.abs(dx)<=0.001&&Math.abs(dy)<=0.001)return 0;
       const tx=hw/Math.abs(dx), ty=hh/Math.abs(dy);
@@ -1885,7 +1905,7 @@ function renderEdges(){
     let aRect=null;
     const aEl=document.getElementById('node-'+a.id);
     if(aEl){
-      const r=aEl.getBoundingClientRect();
+      const r=nodeScreenSize(aEl);
       aRect={cx:ax,cy:ay,hw:r.width/2+4,hh:r.height/2+4};
     }
     const seg=drawSegment(ax,ay,b,hasArrowEnd,dashArr,strokeW,style,e,undefined,a);
@@ -4660,6 +4680,26 @@ function updateZoomDisplay(){
   const el=document.getElementById('zoom-level');
   if(el&&document.activeElement!==el)el.value=Math.round(scale*100)+'%';
 }
+// On-screen size of a node element for edge geometry. getBoundingClientRect()
+// includes CSS transforms, and a node that was just created is still running
+// its "spawn" pop-in animation (scale .55 -> 1.06 -> 1). Edges drawn in that
+// window were clipped against a shrunken node, so right after a file load, at
+// startup, or after adding a node their ends sat in the wrong place until
+// something else triggered a redraw. Dividing the animation's scale back out
+// gives the node's real size from the very first draw. Only nodes that are
+// still animating are checked, so the normal path costs nothing extra.
+function nodeScreenSize(el){
+  const r=el.getBoundingClientRect();
+  let w=r.width,h=r.height;
+  if(el.classList.contains('spawn-in')){
+    const t=getComputedStyle(el).transform;
+    if(t&&t!=='none'){
+      const m=new DOMMatrix(t);
+      if(m.a>0.01&&m.d>0.01){w/=m.a;h/=m.d;}
+    }
+  }
+  return {width:w,height:h};
+}
 // Smooth zoom (used by the C key and the typed zoom-level box). Jumping
 // straight to the new zoom level makes it hard to tell which node you were
 // looking at, so the zoom is eased over a few hundred milliseconds instead.
@@ -4908,7 +4948,7 @@ function renderEdges(){
     const tEl=document.getElementById('node-'+targetNode.id);
     let rect=null, srect=null;
     if(tEl){
-      const r=tEl.getBoundingClientRect();
+      const r=nodeScreenSize(tEl);
       // Even a mathematically exact boundary clip can leave a hair of the
       // stroke visible, since the line has real width straddling its own
       // path — nudge the clip in by half the stroke width as a safety
@@ -4919,7 +4959,7 @@ function renderEdges(){
     if(sourceNode&&!fixedEnd){
       const sEl=document.getElementById('node-'+sourceNode.id);
       if(sEl){
-        const sr=sEl.getBoundingClientRect();
+        const sr=nodeScreenSize(sEl);
         const spad=-strokeW/2;
         srect={cx:sx,cy:sy,hw:sr.width/2+spad,hh:sr.height/2+spad,rad:nodeCornerRadius(sourceNode)*scale+spad};
       }
@@ -4964,7 +5004,7 @@ function renderEdges(){
     function reach(nodeId){
       const el=document.getElementById('node-'+nodeId);
       if(!el)return 0;
-      const r=el.getBoundingClientRect();
+      const r=nodeScreenSize(el);
       const hw=r.width/2+4, hh=r.height/2+4;
       if(Math.abs(dx)<=0.001&&Math.abs(dy)<=0.001)return 0;
       const tx=hw/Math.abs(dx), ty=hh/Math.abs(dy);
@@ -5030,7 +5070,7 @@ function renderEdges(){
     let aRect=null;
     const aEl=document.getElementById('node-'+a.id);
     if(aEl){
-      const r=aEl.getBoundingClientRect();
+      const r=nodeScreenSize(aEl);
       aRect={cx:ax,cy:ay,hw:r.width/2+4,hh:r.height/2+4};
     }
     const seg=drawSegment(ax,ay,b,hasArrowEnd,dashArr,strokeW,style,e,undefined,a);
