@@ -96,6 +96,9 @@ html,body{height:100%;background:var(--color-background-secondary);color:var(--c
 .group-box{position:relative;box-sizing:border-box;border-radius:14px;border:2.5px dashed;transition:outline .18s var(--ease-out);}
 .group-box.selected{outline:2.5px solid var(--color-text-info);outline-offset:2px}
 .group-label{position:absolute;top:-11px;left:14px;font-size:13px;font-weight:600;line-height:1.4;background:var(--color-background-primary);padding:0 5px;pointer-events:none;opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:4px}
+.group-label.pos-tr{left:auto;right:14px}
+.group-label.pos-bl{top:auto;bottom:-11px}
+.group-label.pos-br{top:auto;bottom:-11px;left:auto;right:14px}
 .group-resize-handle{position:absolute;width:14px;height:14px;background:var(--color-background-primary);border:2px solid var(--color-text-info);border-radius:4px;z-index:2;}
 .group-resize-handle.nw{top:-7px;left:-7px;cursor:nwse-resize}
 .group-resize-handle.ne{top:-7px;right:-7px;cursor:nesw-resize}
@@ -268,7 +271,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | C: 拡大率を100%に | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.61</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.62</span>
     <button id="btn-zoom-anim" class="zoom-anim-btn active" type="button" aria-pressed="true" style="margin-left:8px;padding:4px 10px;font-size:12px" title="ズームのアニメーション：ON（クリックで切り替え／Cキーと拡大率の直接入力が対象）">アニメ</button>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:6px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
@@ -423,8 +426,15 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
             <textarea id="node-modal-text" class="comment-ta" placeholder="ノードのテキストを入力..."></textarea>
           </div>
           <div class="node-modal-col node-modal-col-attrs" id="node-modal-col-attrs">
-            <p class="attr-label" id="node-modal-group-title-label"><span>タイトル</span><span class="hint">グループノード左上に表示されます</span></p>
+            <p class="attr-label" id="node-modal-group-title-label"><span>タイトル</span><span class="hint">グループノードの枠に表示されます</span></p>
             <input type="text" id="node-modal-group-title" class="attr-input" placeholder="グループの名前（任意）" autocomplete="off">
+            <p class="attr-label" id="node-modal-group-titlepos-label"><span>タイトル位置</span><span class="hint">タイトルを表示する枠の角</span></p>
+            <div id="node-modal-group-titlepos" style="display:none;align-items:center;gap:16px;padding:2px 0">
+              <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;font-weight:400"><input type="radio" name="node-modal-group-titlepos" value="tl"> 左上</label>
+              <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;font-weight:400"><input type="radio" name="node-modal-group-titlepos" value="tr"> 右上</label>
+              <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;font-weight:400"><input type="radio" name="node-modal-group-titlepos" value="bl"> 左下</label>
+              <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;font-weight:400"><input type="radio" name="node-modal-group-titlepos" value="br"> 右下</label>
+            </div>
             <p class="attr-label"><span>URL</span><span class="hint">Ctrl+Shift+右クリックで開く／複数は「URL1 &amp; URL2」／未設定なら反応しません</span></p>
             <input type="text" id="node-modal-url" class="attr-input" placeholder="https://example.com または ./page.html（複数: URL1 &amp; URL2）" autocomplete="off">
             <p class="attr-label"><span>タグ</span><span class="hint">複数可・#で区切る（例: #タグA#タグB）</span></p>
@@ -603,6 +613,9 @@ const nodesLayer=document.getElementById('nodes-layer');
 const btnUndo=document.getElementById('btn-undo');
 const btnRedo=document.getElementById('btn-redo');
 
+// Group title corner: tl (default) / tr / bl / br. Only non-default values are
+// stored on the node and saved (as GROUPTITLEPOS lines).
+const GROUP_TITLE_POSITIONS=['tl','tr','bl','br'];
 // ── History ───────────────────────────────────────────────
 function snapshot(){
   // Store nodes without src inline (src is large base64; keep reference by id in imgStore)
@@ -671,6 +684,12 @@ function serialize(){
       lines.push(`BRANCH ${n.id}`);
     }
   });
+  nodes.forEach(n=>{
+    // title corner defaults to top-left; only persist when changed
+    if(n.type==='group'&&n.titlePos&&n.titlePos!=='tl'&&GROUP_TITLE_POSITIONS.indexOf(n.titlePos)>=0){
+      lines.push(`GROUPTITLEPOS ${n.id} ${n.titlePos}`);
+    }
+  });
   edges.forEach(e=>{
     let line=`EDGE ${e.from} ${e.to}`;
     const style=(e.style&&e.style!=='arrow')?e.style:null;
@@ -699,6 +718,7 @@ function deserialize(text){
   const attrsMap={};
   const showCommentMap={};
   const groupMemberMap={};
+  const groupTitlePosMap={};
   const branchSet=new Set();
   for(const line of lines){
     if(line.startsWith('NODE ')){
@@ -740,6 +760,9 @@ function deserialize(text){
     } else if(line.startsWith('BRANCH ')){
       const m=line.match(/^BRANCH (\d+)$/);
       if(m)branchSet.add(+m[1]);
+    } else if(line.startsWith('GROUPTITLEPOS ')){
+      const m=line.match(/^GROUPTITLEPOS (\d+) (tl|tr|bl|br)$/);
+      if(m)groupTitlePosMap[+m[1]]=m[2];
     } else if(line.startsWith('EDGE ')){
       const m=line.match(/^EDGE (\d+) (\d+)(?: (.*))?$/);
       if(m){
@@ -783,6 +806,9 @@ function deserialize(text){
     }
     if(n.type==='text'){
       n.branch=branchSet.has(n.id);
+    }
+    if(n.type==='group'&&groupTitlePosMap.hasOwnProperty(n.id)){
+      n.titlePos=groupTitlePosMap[n.id];
     }
   });
   return {nodes:ns,edges:es,nodeId:nid};
@@ -1053,6 +1079,7 @@ function renderGroupNode(n){
   const w=n.width||320, h=n.height||220;
   const lockBadge=n.private?'<div class="private-badge">🔒</div>':'';
   const labelText=(n.title||'').trim()?escHtml(n.title):'▭';
+  const tpCls=GROUP_TITLE_POSITIONS.indexOf(n.titlePos)>0?' pos-'+n.titlePos:'';
   // Resize handles stay a constant on-screen size regardless of canvas zoom
   // (an inverse scale counteracts the group-node-el's own scale(${scale})),
   // so they stay easy to grab even when zoomed far out.
@@ -1064,7 +1091,7 @@ function renderGroupNode(n){
     `<div class="group-resize-handle sw" data-corner="sw" style="${handleStyle}"></div>`+
     `<div class="group-resize-handle se" data-corner="se" style="${handleStyle}"></div>`:'';
   el.innerHTML=`<div class="group-box${isSel?' selected':''}" style="width:${w}px;height:${h}px;background:${c.bg}40;border-color:${isPending?'var(--color-text-info)':c.border}">
-    <div class="group-label" style="color:${c.border};max-width:${w-20}px">${labelText}</div>
+    <div class="group-label${tpCls}" style="color:${c.border};max-width:${w-20}px">${labelText}</div>
     ${lockBadge}
     ${handles}
   </div>`;
@@ -2726,6 +2753,8 @@ const nodeModalCommentToggleRow=document.getElementById('node-modal-comment-togg
 const nodeModalShowComment=document.getElementById('node-modal-show-comment');
 const nodeModalGroupTitleLabel=document.getElementById('node-modal-group-title-label');
 const nodeModalGroupTitle=document.getElementById('node-modal-group-title');
+const nodeModalGroupTitlePosLabel=document.getElementById('node-modal-group-titlepos-label');
+const nodeModalGroupTitlePos=document.getElementById('node-modal-group-titlepos');
 const nodeModalUrl=document.getElementById('node-modal-url');
 const nodeModalTags=document.getElementById('node-modal-tags');
 const nodeModalStatus=document.getElementById('node-modal-status');
@@ -2751,6 +2780,8 @@ function openNodeModal(n){
   nodeModalText.style.display=isImg?'block':'none';
   nodeModalGroupTitleLabel.style.display=isGroup?'flex':'none';
   nodeModalGroupTitle.style.display=isGroup?'block':'none';
+  nodeModalGroupTitlePosLabel.style.display=isGroup?'flex':'none';
+  nodeModalGroupTitlePos.style.display=isGroup?'flex':'none';
   nodeModalBranchRow.style.display=isText?'block':'none';
   if(isImg){
     nodeModalText.placeholder='この画像へのコメントを入力...';
@@ -2763,6 +2794,8 @@ function openNodeModal(n){
   }
   if(isGroup){
     nodeModalGroupTitle.value=n.title||'';
+    const tp=GROUP_TITLE_POSITIONS.indexOf(n.titlePos)>=0?n.titlePos:'tl';
+    nodeModalGroupTitlePos.querySelectorAll('input[type=radio]').forEach(r=>{r.checked=(r.value===tp);});
   }
   if(isText){
     nodeModalBranch.checked=n.branch===true;
@@ -2803,6 +2836,10 @@ function saveNodeModal(){
   }
   if(n.type==='group'){
     n.title=nodeModalGroupTitle.value.trim();
+    // Top-left is the default and carries no property (keeps saved data / snapshots clean)
+    const chk=nodeModalGroupTitlePos.querySelector('input[type=radio]:checked');
+    const tp=chk?chk.value:'tl';
+    if(tp!=='tl'&&GROUP_TITLE_POSITIONS.indexOf(tp)>=0)n.titlePos=tp;else delete n.titlePos;
   }
   if(n.type==='text'){
     n.branch=nodeModalBranch.checked;
@@ -4258,6 +4295,7 @@ function deserialize(text){
   const attrsMap={};
   const showCommentMap={};
   const groupMemberMap={};
+  const groupTitlePosMap={};
   const branchSet=new Set();
   for(const line of lines){
     if(line.startsWith('NODE ')){
@@ -4296,6 +4334,9 @@ function deserialize(text){
     } else if(line.startsWith('BRANCH ')){
       const m=line.match(/^BRANCH (\\d+)$/);
       if(m)branchSet.add(+m[1]);
+    } else if(line.startsWith('GROUPTITLEPOS ')){
+      const m=line.match(/^GROUPTITLEPOS (\\d+) (tl|tr|bl|br)$/);
+      if(m)groupTitlePosMap[+m[1]]=m[2];
     } else if(line.startsWith('EDGE ')){
       const m=line.match(/^EDGE (\\d+) (\\d+)(?: (.*))?$/);
       if(m){
@@ -4336,6 +4377,9 @@ function deserialize(text){
     }
     if(n.type==='text'){
       n.branch=branchSet.has(n.id);
+    }
+    if(n.type==='group'&&groupTitlePosMap.hasOwnProperty(n.id)){
+      n.titlePos=groupTitlePosMap[n.id];
     }
   });
   return {nodes:ns,edges:es,nodeId:nid};
@@ -4652,7 +4696,8 @@ function renderAll(){
       const c=getColors()[n.colorIdx||0];
       const gw=n.width||320, gh=n.height||220;
       const labelText=(n.title||'').trim()?escHtml(n.title):'▭';
-      el.innerHTML='<div class="group-box" style="width:'+gw+'px;height:'+gh+'px;background:'+c.bg+'40;border-color:'+c.border+'"><div class="group-label" style="color:'+c.border+';max-width:'+(gw-20)+'px">'+labelText+'</div></div>';
+      const tpCls=(n.titlePos==='tr'||n.titlePos==='bl'||n.titlePos==='br')?' pos-'+n.titlePos:'';
+      el.innerHTML='<div class="group-box" style="width:'+gw+'px;height:'+gh+'px;background:'+c.bg+'40;border-color:'+c.border+'"><div class="group-label'+tpCls+'" style="color:'+c.border+';max-width:'+(gw-20)+'px">'+labelText+'</div></div>';
       // A group nested inside another group must always draw above its
       // outer container so it stays visible, regardless of which one
       // happens to exist in the DOM first (see groupNestingDepth).
@@ -5638,6 +5683,9 @@ html,body{height:100%;background:var(--color-background-secondary);color:var(--c
 .group-node-el.spawn-in{animation:nodeSpawn .45s var(--ease-bounce) both}
 .group-box{position:relative;box-sizing:border-box;border-radius:14px;border:2.5px dashed}
 .group-label{position:absolute;top:-11px;left:14px;font-size:13px;font-weight:600;line-height:1.4;background:var(--color-background-primary);padding:0 5px;pointer-events:none;opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:4px}
+.group-label.pos-tr{left:auto;right:14px}
+.group-label.pos-bl{top:auto;bottom:-11px}
+.group-label.pos-br{top:auto;bottom:-11px;left:auto;right:14px}
 .img-node-wrap{border-radius:12px;border:1.5px solid var(--color-border-secondary);background:var(--color-background-primary);display:inline-block;overflow:visible;transition:outline .18s var(--ease-out),transform .18s var(--ease-out)}
 .img-node-wrap img{display:block;max-width:100%;border-radius:12px 12px 0 0}
 .img-node-caption{padding:6px 10px;font-size:11px;color:var(--color-text-secondary);border-top:0.5px solid var(--color-border-tertiary);border-radius:0 0 12px 12px;background:var(--color-background-primary);word-break:break-all;white-space:pre-wrap;border:none}
