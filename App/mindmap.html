@@ -64,6 +64,17 @@ html,body{height:100%;background:var(--color-background-secondary);color:var(--c
 #map-title-text{user-select:text}
 #canvas{flex:1;position:relative;overflow:hidden;cursor:grab;user-select:none}
 #canvas.grabbing{cursor:grabbing}
+/* Canvas-centre marker, shown only while the view is being dragged. The C-key / zoom-box
+   zoom is anchored on exactly this point (the canvas element's centre). */
+#pan-center-mark{position:absolute;left:50%;top:50%;width:36px;height:36px;margin:-18px 0 0 -18px;pointer-events:none;z-index:30;opacity:0;transition:opacity .12s ease}
+#pan-center-mark.show{opacity:.9}
+#pan-center-mark .pcm-halo{stroke:rgba(255,255,255,.85)}
+#pan-center-mark .pcm-line{stroke:#5b7184}
+#pan-center-mark .pcm-dot{fill:#5b7184;stroke:rgba(255,255,255,.85)}
+body.dark #pan-center-mark .pcm-halo{stroke:rgba(0,0,0,.55)}
+body.dark #pan-center-mark .pcm-line{stroke:#a9bccd}
+body.dark #pan-center-mark .pcm-dot{fill:#a9bccd;stroke:rgba(0,0,0,.55)}
+#pan-center-mark svg{display:block;width:100%;height:100%;overflow:visible}
 #canvas.pan-lock .node-el,#canvas.pan-lock .img-node-el,#canvas.pan-lock .group-node-el{cursor:grab}
 #canvas.pan-lock.grabbing .node-el,#canvas.pan-lock.grabbing .img-node-el,#canvas.pan-lock.grabbing .group-node-el{cursor:grabbing}
 #canvas.dragover{outline:3px dashed var(--color-text-info);outline-offset:-4px;}
@@ -273,14 +284,16 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | C: 拡大率を100%に | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.64</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.65</span>
     <button id="btn-zoom-anim" class="zoom-anim-btn active" type="button" aria-pressed="true" style="margin-left:8px;padding:4px 10px;font-size:12px" title="ズームのアニメーション：ON（クリックで切り替え／Cキーと拡大率の直接入力が対象）">アニメ</button>
+    <button id="btn-pan-marker" class="zoom-anim-btn active" type="button" aria-pressed="true" style="margin-left:6px;padding:4px 10px;font-size:12px" title="パン中の中心マーカー：ON（クリックまたはShift+Tで切り替え）">マーカー</button>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:6px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
       <span id="theme-label">ダーク</span>
     </button>
   </div>
   <div id="canvas">
+    <div id="pan-center-mark" aria-hidden="true"><svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke-linecap="round"><g class="pcm-halo" stroke-width="4.5"><circle cx="18" cy="18" r="8"/><path d="M3 18H12M24 18H33M18 3V12M18 24V33"/></g><g class="pcm-line" stroke-width="1.6"><circle cx="18" cy="18" r="8"/><path d="M3 18H12M24 18H33M18 3V12M18 24V33"/></g></g><circle class="pcm-dot" cx="18" cy="18" r="1.8" stroke-width="1"/></svg></div>
     <svg id="svg-layer">
       <defs>
         <marker id="arr" viewBox="0 0 10 10" refX="7.4" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
@@ -3016,6 +3029,31 @@ canvas.addEventListener('mousedown',e=>{
     panStart={x:e.clientX-panX,y:e.clientY-panY};renderAll();
   }
 });
+const panCenterMark=document.getElementById('pan-center-mark');
+// Shift+T switches the marker on/off; the choice is remembered (default ON).
+let panMarkerEnabled=true;
+try{panMarkerEnabled=localStorage.getItem('mindmap-pan-marker')!=='off';}catch(e){}
+function updatePanMarkerButton(){
+  const b=document.getElementById('btn-pan-marker');
+  if(!b)return;
+  b.classList.toggle('active',panMarkerEnabled);
+  b.setAttribute('aria-pressed',panMarkerEnabled?'true':'false');
+  b.title='パン中の中心マーカー：'+(panMarkerEnabled?'ON':'OFF')+'（クリックまたはShift+Tで切り替え）';
+}
+function togglePanMarker(){
+  panMarkerEnabled=!panMarkerEnabled;
+  try{localStorage.setItem('mindmap-pan-marker',panMarkerEnabled?'on':'off');}catch(e){}
+  if(!panMarkerEnabled)panCenterMark.classList.remove('show');
+  updatePanMarkerButton();
+  showToast(panMarkerEnabled?'⌖ パン中の中心マーカーをONにしました（Shift+Tで切り替え）':'⌖ パン中の中心マーカーをOFFにしました（Shift+Tで切り替え）');
+}
+{
+  const pb=document.getElementById('btn-pan-marker');
+  if(pb){
+    pb.addEventListener('click',()=>{togglePanMarker();pb.blur();});
+    updatePanMarkerButton();
+  }
+}
 // Ends an in-progress pan. Registered on window (capture) rather than on the
 // canvas: if the button is released over the header/toolbar/outside the
 // canvas, a canvas-only mouseup never fires, isPanning stays true, and the
@@ -3034,6 +3072,7 @@ function endPan(){
   // didn't actually start a pan here.
   if(!isPanning)return;
   isPanning=false;canvas.classList.remove('grabbing');
+  panCenterMark.classList.remove('show');
   // Only when actual panning motion happened (didPan) — the coalesced
   // scheduleRenderAll() only guarantees a redraw within the next animation
   // frame, so this guarantees the final pan position is drawn the instant
@@ -3046,6 +3085,8 @@ canvas.addEventListener('mousemove',e=>{
     // no button held any more means the pan is over.
     if(e.buttons===0){endPan();return;}
     panX=e.clientX-panStart.x;panY=e.clientY-panStart.y;didPan=true;scheduleRenderAll();
+    // Show the canvas-centre marker once the view actually moves (not on a plain click).
+    if(panMarkerEnabled)panCenterMark.classList.add('show');
   }
 });
 window.addEventListener('mouseup',endPan,true);
@@ -3430,6 +3471,12 @@ document.addEventListener('keydown',e=>{
     }
   }
 
+  // Shift+T: toggle the canvas-centre marker shown while panning
+  if(e.shiftKey&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&(e.key==='T'||e.key==='t')){
+    e.preventDefault();
+    togglePanMarker();
+    return;
+  }
   // C: reset zoom to 100% (centered on viewport)
   if(e.key==='c'&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey){
     e.preventDefault();
@@ -5158,12 +5205,38 @@ canvas.addEventListener('mousedown',e=>{
   isPanning=true;didPan=false;canvas.classList.add('grabbing');
   panStart={x:e.clientX-panX,y:e.clientY-panY};
 });
+const panCenterMark=document.getElementById('pan-center-mark');
+// Shift+T switches the marker on/off; the choice is remembered (default ON).
+let panMarkerEnabled=true;
+try{panMarkerEnabled=localStorage.getItem('mindmap-pan-marker')!=='off';}catch(e){}
+function updatePanMarkerButton(){
+  const b=document.getElementById('btn-pan-marker');
+  if(!b)return;
+  b.classList.toggle('active',panMarkerEnabled);
+  b.setAttribute('aria-pressed',panMarkerEnabled?'true':'false');
+  b.title='パン中の中心マーカー：'+(panMarkerEnabled?'ON':'OFF')+'（クリックまたはShift+Tで切り替え）';
+}
+function togglePanMarker(){
+  panMarkerEnabled=!panMarkerEnabled;
+  try{localStorage.setItem('mindmap-pan-marker',panMarkerEnabled?'on':'off');}catch(e){}
+  if(!panMarkerEnabled)panCenterMark.classList.remove('show');
+  updatePanMarkerButton();
+  showToast(panMarkerEnabled?'⌖ パン中の中心マーカーをONにしました（Shift+Tで切り替え）':'⌖ パン中の中心マーカーをOFFにしました（Shift+Tで切り替え）');
+}
+{
+  const pb=document.getElementById('btn-pan-marker');
+  if(pb){
+    pb.addEventListener('click',()=>{togglePanMarker();pb.blur();});
+    updatePanMarkerButton();
+  }
+}
 // Ends an in-progress pan. Registered on window (capture), not the canvas, so a
 // button release outside the canvas (header, toolbar, outside the page) still
 // ends the pan — see the editor's identical endPan().
 function endPan(){
   if(!isPanning)return;
   isPanning=false;canvas.classList.remove('grabbing');
+  panCenterMark.classList.remove('show');
   // Only when actual panning motion happened (didPan): calling this on every
   // mouseup, including a plain click on a node with no movement (every node
   // mousedown bubbles here), rebuilds node/edge DOM synchronously before the
@@ -5178,6 +5251,8 @@ canvas.addEventListener('mousemove',e=>{
     // Safety net for a release we never saw: no button held means the pan is over.
     if(e.buttons===0){endPan();return;}
     panX=e.clientX-panStart.x;panY=e.clientY-panStart.y;didPan=true;scheduleRenderAll();
+    // Show the canvas-centre marker once the view actually moves (not on a plain click).
+    if(panMarkerEnabled)panCenterMark.classList.add('show');
   }
 });
 window.addEventListener('mouseup',endPan,true);
@@ -5553,6 +5628,12 @@ document.addEventListener('keydown',e=>{
       showToast('📍 最も若いIDのノードを中央に表示しました');
     }
   }
+  // Shift+T: toggle the canvas-centre marker shown while panning
+  if(e.shiftKey&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&(e.key==='T'||e.key==='t')){
+    e.preventDefault();
+    togglePanMarker();
+    return;
+  }
   if(e.key==='c'&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey){
     e.preventDefault();
     // Toggle: from anywhere else, go to 100%; pressing it again while
@@ -5691,6 +5772,17 @@ html,body{height:100%;background:var(--color-background-secondary);color:var(--c
 #map-title-text{user-select:text}
 #canvas{flex:1;position:relative;overflow:hidden;cursor:grab;user-select:none}
 #canvas.grabbing{cursor:grabbing}
+/* Canvas-centre marker, shown only while the view is being dragged. The C-key / zoom-box
+   zoom is anchored on exactly this point (the canvas element's centre). */
+#pan-center-mark{position:absolute;left:50%;top:50%;width:36px;height:36px;margin:-18px 0 0 -18px;pointer-events:none;z-index:30;opacity:0;transition:opacity .12s ease}
+#pan-center-mark.show{opacity:.9}
+#pan-center-mark .pcm-halo{stroke:rgba(255,255,255,.85)}
+#pan-center-mark .pcm-line{stroke:#5b7184}
+#pan-center-mark .pcm-dot{fill:#5b7184;stroke:rgba(255,255,255,.85)}
+body.dark #pan-center-mark .pcm-halo{stroke:rgba(0,0,0,.55)}
+body.dark #pan-center-mark .pcm-line{stroke:#a9bccd}
+body.dark #pan-center-mark .pcm-dot{fill:#a9bccd;stroke:rgba(0,0,0,.55)}
+#pan-center-mark svg{display:block;width:100%;height:100%;overflow:visible}
 #svg-layer{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:5}
 .node-el{position:absolute;transform:translate(-50%,-50%);cursor:pointer;z-index:10}
 .node-el.spawn-in{animation:nodeSpawn .45s var(--ease-bounce) both}
@@ -5770,9 +5862,11 @@ button.active{background:var(--color-background-info);border-color:var(--color-b
     <h1>🌐 ${escHtmlStr(title)}</h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">ダブルクリック: 展開/折り畳み | Ctrl+Shift+右クリック: URLを開く | WASD: スクロール | N/B: 次/前の接続グループへ | C: 拡大率を100%に | Ctrl+Shift+クリック: 同じ内容のノードへジャンプ</span>
     <button id="btn-zoom-anim" class="zoom-anim-btn active" type="button" aria-pressed="true" style="margin-left:8px;padding:4px 10px;font-size:12px" title="ズームのアニメーション：ON（クリックで切り替え／Cキーと拡大率の直接入力が対象）">アニメ</button>
+    <button id="btn-pan-marker" class="zoom-anim-btn active" type="button" aria-pressed="true" style="margin-left:6px;padding:4px 10px;font-size:12px" title="パン中の中心マーカー：ON（クリックまたはShift+Tで切り替え）">マーカー</button>
     <button id="btn-theme" style="margin-left:6px;padding:4px 10px"><i id="theme-icon" class="ti ti-moon"></i> <span id="theme-label">ダーク</span></button>
   </div>
   <div id="canvas">
+    <div id="pan-center-mark" aria-hidden="true"><svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke-linecap="round"><g class="pcm-halo" stroke-width="4.5"><circle cx="18" cy="18" r="8"/><path d="M3 18H12M24 18H33M18 3V12M18 24V33"/></g><g class="pcm-line" stroke-width="1.6"><circle cx="18" cy="18" r="8"/><path d="M3 18H12M24 18H33M18 3V12M18 24V33"/></g></g><circle class="pcm-dot" cx="18" cy="18" r="1.8" stroke-width="1"/></svg></div>
     <svg id="svg-layer">
       <defs>
         <marker id="arr" viewBox="0 0 10 10" refX="7.4" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
