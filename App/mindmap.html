@@ -273,7 +273,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | C: 拡大率を100%に | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.63</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.64</span>
     <button id="btn-zoom-anim" class="zoom-anim-btn active" type="button" aria-pressed="true" style="margin-left:8px;padding:4px 10px;font-size:12px" title="ズームのアニメーション：ON（クリックで切り替え／Cキーと拡大率の直接入力が対象）">アニメ</button>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:6px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
@@ -3016,30 +3016,40 @@ canvas.addEventListener('mousedown',e=>{
     panStart={x:e.clientX-panX,y:e.clientY-panY};renderAll();
   }
 });
-canvas.addEventListener('mousemove',e=>{
-  if(isPanning){panX=e.clientX-panStart.x;panY=e.clientY-panStart.y;didPan=true;scheduleRenderAll();}
-});
-canvas.addEventListener('mouseup',e=>{
-  // Guard on isPanning itself, not just didPan: this listener is on canvas,
-  // so it also fires for the mouseup of a plain/Ctrl+click on a node whose
-  // own mousedown never touched canvas at all (e.g. Ctrl+click's handler
-  // calls stopPropagation) — that mouseup still bubbles up here since
-  // nothing stops *it*. Without this guard, isPanning/didPan would be left
-  // over from whatever pan last happened (real or not) and this branch
-  // would fire again for that unrelated click, rebuilding node/edge DOM
-  // synchronously before the browser's own follow-up 'click' event is
-  // dispatched — which silently drops that click. Guarding on isPanning
-  // (true only between a pan's own mousedown and its own mouseup) makes
-  // this a no-op for every click that didn't actually start a pan here.
+// Ends an in-progress pan. Registered on window (capture) rather than on the
+// canvas: if the button is released over the header/toolbar/outside the
+// canvas, a canvas-only mouseup never fires, isPanning stays true, and the
+// view then "sticks" to the cursor (panning with no button held) as soon as
+// the mouse re-enters the canvas.
+function endPan(){
+  // Guard on isPanning itself, not just didPan: this is also reached for the
+  // mouseup of a plain/Ctrl+click on a node whose own mousedown never started
+  // a pan (e.g. Ctrl+click's handler calls stopPropagation). Without this
+  // guard, isPanning/didPan would be left over from whatever pan last
+  // happened (real or not) and the renderAll() below would fire again for
+  // that unrelated click, rebuilding node/edge DOM synchronously before the
+  // browser's own follow-up 'click' event is dispatched — which silently
+  // drops that click. Guarding on isPanning (true only between a pan's own
+  // mousedown and its own mouseup) makes this a no-op for every click that
+  // didn't actually start a pan here.
   if(!isPanning)return;
   isPanning=false;canvas.classList.remove('grabbing');
   // Only when actual panning motion happened (didPan) — the coalesced
-  // scheduleRenderAll() above only guarantees a redraw within the next
-  // animation frame, so this guarantees the final pan position is drawn the
-  // instant the mouse is released rather than after an extra, perceptible-
-  // on-a-slow-frame delay.
+  // scheduleRenderAll() only guarantees a redraw within the next animation
+  // frame, so this guarantees the final pan position is drawn the instant
+  // the mouse is released rather than after a perceptible delay.
   if(didPan)renderAll();
+}
+canvas.addEventListener('mousemove',e=>{
+  if(isPanning){
+    // Safety net for a release we never saw (e.g. outside the browser window):
+    // no button held any more means the pan is over.
+    if(e.buttons===0){endPan();return;}
+    panX=e.clientX-panStart.x;panY=e.clientY-panStart.y;didPan=true;scheduleRenderAll();
+  }
 });
+window.addEventListener('mouseup',endPan,true);
+window.addEventListener('blur',endPan);
 
 // Wheel zoom (zoom toward cursor)
 canvas.addEventListener('wheel',e=>{
@@ -5148,20 +5158,30 @@ canvas.addEventListener('mousedown',e=>{
   isPanning=true;didPan=false;canvas.classList.add('grabbing');
   panStart={x:e.clientX-panX,y:e.clientY-panY};
 });
-canvas.addEventListener('mousemove',e=>{if(isPanning){panX=e.clientX-panStart.x;panY=e.clientY-panStart.y;didPan=true;scheduleRenderAll();}});
-canvas.addEventListener('mouseup',()=>{
+// Ends an in-progress pan. Registered on window (capture), not the canvas, so a
+// button release outside the canvas (header, toolbar, outside the page) still
+// ends the pan — see the editor's identical endPan().
+function endPan(){
   if(!isPanning)return;
   isPanning=false;canvas.classList.remove('grabbing');
-  // Only when actual panning motion happened (didPan) — see the editor's
-  // identical guard for why: calling this unconditionally on every mouseup,
-  // including a plain click on a node with no movement (every node
-  // mousedown bubbles here, per the comment above), rebuilds node/edge DOM
-  // synchronously before the browser's own follow-up 'click' event is
-  // dispatched, and the browser drops that click entirely when its target
-  // gets touched by the rebuild — silently breaking double-click
-  // (expand/collapse) and Ctrl+Shift+click (jump to duplicate / open URL).
+  // Only when actual panning motion happened (didPan): calling this on every
+  // mouseup, including a plain click on a node with no movement (every node
+  // mousedown bubbles here), rebuilds node/edge DOM synchronously before the
+  // browser's own follow-up 'click' event is dispatched, and the browser drops
+  // that click entirely when its target gets touched by the rebuild — silently
+  // breaking double-click (expand/collapse) and Ctrl+Shift+click (jump to
+  // duplicate / open URL).
   if(didPan)renderAll();
+}
+canvas.addEventListener('mousemove',e=>{
+  if(isPanning){
+    // Safety net for a release we never saw: no button held means the pan is over.
+    if(e.buttons===0){endPan();return;}
+    panX=e.clientX-panStart.x;panY=e.clientY-panStart.y;didPan=true;scheduleRenderAll();
+  }
 });
+window.addEventListener('mouseup',endPan,true);
+window.addEventListener('blur',endPan);
 function isAnyModalOpen(){
   return ['attr-modal','tag-status-overlay','url-choice-overlay'].some(id=>{
     const el=document.getElementById(id);
