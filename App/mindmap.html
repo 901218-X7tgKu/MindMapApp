@@ -98,6 +98,7 @@ body.dark #pan-center-mark .pcm-dot{fill:#a9bccd;stroke:rgba(0,0,0,.55)}
 .img-node-wrap.selected{outline:2.5px solid var(--color-text-info);outline-offset:2px;border-radius:12px}
 .img-node-wrap img{display:block;max-width:100%;border-radius:12px 12px 0 0}
 .img-node-caption{padding:6px 10px;font-size:11px;color:var(--color-text-secondary);border-top:0.5px solid var(--color-border-tertiary);border-radius:0 0 12px 12px;background:var(--color-background-primary);word-break:break-all;white-space:pre-wrap;cursor:text;border:none}
+.img-node-caption.pos-top{border-top:none;border-bottom:0.5px solid var(--color-border-tertiary);border-radius:12px 12px 0 0}
 .img-node-caption.empty{color:var(--color-text-tertiary);font-style:italic}
 .img-node-caption input,.img-node-caption textarea{width:100%;background:none;border:none;outline:none;font-size:11px;color:var(--color-text-primary);font-family:inherit;resize:none;padding:0}
 
@@ -284,7 +285,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | C: 拡大率を100%に | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.66</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.67</span>
     <button id="btn-zoom-anim" class="zoom-anim-btn active" type="button" aria-pressed="true" style="margin-left:8px;padding:4px 10px;font-size:12px" title="ズームのアニメーション：ON（クリックで切り替え／Cキーと拡大率の直接入力が対象）">アニメ</button>
     <button id="btn-pan-marker" class="zoom-anim-btn active" type="button" aria-pressed="true" style="margin-left:6px;padding:4px 10px;font-size:12px" title="パン中の中心マーカー：ON（クリックまたはShift+Tで切り替え）">マーカー</button>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:6px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
@@ -437,6 +438,13 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
               <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;font-weight:400">
                 <input type="checkbox" id="node-modal-show-comment" checked> コメントを表示
               </label>
+            </div>
+            <div id="node-modal-comment-pos-row" style="display:none;align-items:center;justify-content:space-between;margin-top:6px">
+              <p style="margin:0">コメント位置</p>
+              <div style="display:flex;align-items:center;gap:16px">
+                <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;font-weight:400"><input type="radio" name="node-modal-comment-pos" value="top"> 上部</label>
+                <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;font-weight:400"><input type="radio" name="node-modal-comment-pos" value="bottom" checked> 下部</label>
+              </div>
             </div>
             <textarea id="node-modal-text" class="comment-ta" placeholder="ノードのテキストを入力..."></textarea>
           </div>
@@ -696,6 +704,12 @@ function serialize(){
     }
   });
   nodes.forEach(n=>{
+    // comment position defaults to bottom; only persist when set to top
+    if(n.type==='image'&&n.commentPos==='top'){
+      lines.push(`IMGCMTPOS ${n.id} top`);
+    }
+  });
+  nodes.forEach(n=>{
     // branch defaults to false; only persist when explicitly turned on
     if(n.type==='text'&&n.branch===true){
       lines.push(`BRANCH ${n.id}`);
@@ -734,6 +748,7 @@ function deserialize(text){
   const ns=[],es=[],edgeColorList=[];let nid=0;
   const attrsMap={};
   const showCommentMap={};
+  const commentPosMap={};
   const groupMemberMap={};
   const groupTitlePosMap={};
   const branchSet=new Set();
@@ -770,6 +785,9 @@ function deserialize(text){
     } else if(line.startsWith('IMGCMT ')){
       const m=line.match(/^IMGCMT (\d+) ([01])$/);
       if(m)showCommentMap[+m[1]]=m[2]==='1';
+    } else if(line.startsWith('IMGCMTPOS ')){
+      const m=line.match(/^IMGCMTPOS (\d+) (top|bottom)$/);
+      if(m)commentPosMap[+m[1]]=m[2];
     } else if(line.startsWith('EDGECOLOR ')){
       // "EDGECOLOR <from> <to> <colorKey>" — unknown keys are ignored.
       const ep=line.split(' ');
@@ -820,6 +838,7 @@ function deserialize(text){
     n.groupId=groupMemberMap.hasOwnProperty(n.id)?groupMemberMap[n.id]:null;
     if(n.type==='image'){
       n.showComment=showCommentMap.hasOwnProperty(n.id)?showCommentMap[n.id]:true;
+      if(commentPosMap[n.id]==='top')n.commentPos='top';
     }
     if(n.type==='text'){
       n.branch=branchSet.has(n.id);
@@ -1003,12 +1022,14 @@ function renderImgNode(n){
   // Determine display width: stored n.width, or derive from natural image size (max 400px)
   const MAX_IMG_W=1000;
   function buildHtml(dispW,dispH){
-    const imgRadius=showComment?'12px 12px 0 0':'12px';
-    const caption=showComment?`<div class="img-node-caption">${capText}</div>`:'';
+    const capTop=showComment&&n.commentPos==='top';
+    const imgRadius=showComment?(capTop?'0 0 12px 12px':'12px 12px 0 0'):'12px';
+    const caption=showComment?`<div class="img-node-caption${capTop?' pos-top':''}">${capText}</div>`:'';
     const lockBadge=n.private?'<div class="private-badge">🔒</div>':'';
     return `<div class="img-node-wrap${selected===n.id||isPending?' selected':''}" style="width:${dispW}px;border-color:${isPending?'var(--color-text-info)':''}">
+    ${capTop?caption:''}
     <img src="${n.src}" alt="image node" draggable="false" style="width:${dispW}px;height:${dispH}px;object-fit:contain;border-radius:${imgRadius}">
-    ${caption}
+    ${capTop?'':caption}
     ${lockBadge}
   </div>`;
   }
@@ -2832,6 +2853,13 @@ const nodeModalTextLabel=document.getElementById('node-modal-text-label');
 const nodeModalText=document.getElementById('node-modal-text');
 const nodeModalCommentToggleRow=document.getElementById('node-modal-comment-toggle-row');
 const nodeModalShowComment=document.getElementById('node-modal-show-comment');
+const nodeModalCommentPosRow=document.getElementById('node-modal-comment-pos-row');
+// The position choice only matters while the comment is shown: dim/disable it otherwise.
+function updateCommentPosEnabled(){
+  const on=nodeModalShowComment.checked;
+  nodeModalCommentPosRow.style.opacity=on?'1':'0.45';
+  nodeModalCommentPosRow.querySelectorAll('input[type=radio]').forEach(r=>{r.disabled=!on;});
+}
 const nodeModalGroupTitleLabel=document.getElementById('node-modal-group-title-label');
 const nodeModalGroupTitle=document.getElementById('node-modal-group-title');
 const nodeModalGroupTitlePosLabel=document.getElementById('node-modal-group-titlepos-label');
@@ -2858,6 +2886,7 @@ function openNodeModal(n){
   nodeModalPreview.style.display=isImg?'block':'none';
   nodeModalSizeRow.style.display=isImg?'flex':'none';
   nodeModalCommentToggleRow.style.display=isImg?'flex':'none';
+  nodeModalCommentPosRow.style.display=isImg?'flex':'none';
   nodeModalText.style.display=isImg?'block':'none';
   nodeModalGroupTitleLabel.style.display=isGroup?'flex':'none';
   nodeModalGroupTitle.style.display=isGroup?'block':'none';
@@ -2872,6 +2901,8 @@ function openNodeModal(n){
     nodeModalWidthLabel.textContent=w+' px';
     nodeModalText.value=n.comment||'';
     nodeModalShowComment.checked=n.showComment!==false;
+    nodeModalCommentPosRow.querySelectorAll('input[type=radio]').forEach(r=>{r.checked=(r.value===(n.commentPos==='top'?'top':'bottom'));});
+    updateCommentPosEnabled();
   }
   if(isGroup){
     nodeModalGroupTitle.value=n.title||'';
@@ -2904,6 +2935,7 @@ nodeModalWidth.addEventListener('input',function(){
 nodeModalShowComment.addEventListener('change',function(){
   if(editingNode&&editingNode.type==='image'){
     editingNode.showComment=this.checked;
+    updateCommentPosEnabled();
     renderAll();
   }
 });
@@ -2914,6 +2946,9 @@ function saveNodeModal(){
     n.comment=nodeModalText.value;
     n.width=+nodeModalWidth.value;
     n.showComment=nodeModalShowComment.checked;
+    // Bottom is the default and carries no property (keeps saved data / snapshots clean)
+    const cpChk=nodeModalCommentPosRow.querySelector('input[type=radio]:checked');
+    if(cpChk&&cpChk.value==='top')n.commentPos='top';else delete n.commentPos;
   }
   if(n.type==='group'){
     n.title=nodeModalGroupTitle.value.trim();
@@ -4428,6 +4463,7 @@ function deserialize(text){
   const ns=[],es=[],edgeColorList=[];let nid=0;
   const attrsMap={};
   const showCommentMap={};
+  const commentPosMap={};
   const groupMemberMap={};
   const groupTitlePosMap={};
   const branchSet=new Set();
@@ -4461,6 +4497,9 @@ function deserialize(text){
     } else if(line.startsWith('IMGCMT ')){
       const m=line.match(/^IMGCMT (\\d+) ([01])$/);
       if(m)showCommentMap[+m[1]]=m[2]==='1';
+    } else if(line.startsWith('IMGCMTPOS ')){
+      const m=line.match(/^IMGCMTPOS (\\d+) (top|bottom)$/);
+      if(m)commentPosMap[+m[1]]=m[2];
     } else if(line.startsWith('EDGECOLOR ')){
       // "EDGECOLOR <from> <to> <colorKey>" — unknown keys are ignored.
       const ep=line.split(' ');
@@ -4508,6 +4547,7 @@ function deserialize(text){
     n.groupId=groupMemberMap.hasOwnProperty(n.id)?groupMemberMap[n.id]:null;
     if(n.type==='image'){
       n.showComment=showCommentMap.hasOwnProperty(n.id)?showCommentMap[n.id]:true;
+      if(commentPosMap[n.id]==='top')n.commentPos='top';
     }
     if(n.type==='text'){
       n.branch=branchSet.has(n.id);
@@ -4840,9 +4880,10 @@ function renderAll(){
       const w=n.width||180;
       const showComment=n.showComment!==false;
       const capText=n.comment?formatNodeText(n.comment):'<span style="color:var(--color-text-tertiary);font-style:italic">コメントなし</span>';
-      const imgRadius=showComment?'12px 12px 0 0':'12px';
-      const caption=showComment?'<div class="img-node-caption">'+capText+'</div>':'';
-      el.innerHTML='<div class="img-node-wrap" style="width:'+w+'px"><img src="'+n.src+'" draggable="false" style="width:'+w+'px;height:'+Math.round(w*2/3)+'px;object-fit:contain;border-radius:'+imgRadius+'">'+caption+'</div>';
+      const capTop=showComment&&n.commentPos==='top';
+      const imgRadius=showComment?(capTop?'0 0 12px 12px':'12px 12px 0 0'):'12px';
+      const caption=showComment?'<div class="img-node-caption'+(capTop?' pos-top':'')+'">'+capText+'</div>':'';
+      el.innerHTML='<div class="img-node-wrap" style="width:'+w+'px">'+(capTop?caption:'')+'<img src="'+n.src+'" draggable="false" style="width:'+w+'px;height:'+Math.round(w*2/3)+'px;object-fit:contain;border-radius:'+imgRadius+'">'+(capTop?'':caption)+'</div>';
       if(n.naturalW&&n.naturalH){
         const dh=Math.round(w*n.naturalH/n.naturalW);
         el.querySelector('img').style.height=dh+'px';
@@ -5953,6 +5994,7 @@ body.dark #pan-center-mark .pcm-dot{fill:#a9bccd;stroke:rgba(0,0,0,.55)}
 .img-node-wrap{border-radius:12px;border:1.5px solid var(--color-border-secondary);background:var(--color-background-primary);display:inline-block;overflow:visible;transition:outline .18s var(--ease-out),transform .18s var(--ease-out)}
 .img-node-wrap img{display:block;max-width:100%;border-radius:12px 12px 0 0}
 .img-node-caption{padding:6px 10px;font-size:11px;color:var(--color-text-secondary);border-top:0.5px solid var(--color-border-tertiary);border-radius:0 0 12px 12px;background:var(--color-background-primary);word-break:break-all;white-space:pre-wrap;border:none}
+.img-node-caption.pos-top{border-top:none;border-bottom:0.5px solid var(--color-border-tertiary);border-radius:12px 12px 0 0}
 .search-hit{outline:2.5px solid #f5a623!important;outline-offset:3px}
 .search-current{outline:3px solid #e8430a!important;outline-offset:3px}
 .node-box.hover-self,.img-node-wrap.hover-self{outline:2.5px solid #f5a100;outline-offset:3px;box-shadow:0 0 0 4px rgba(245,161,0,.15);transform:scale(1.045)}
