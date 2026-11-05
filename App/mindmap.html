@@ -74,6 +74,50 @@ html,body{height:100%;background:var(--color-background-secondary);color:var(--c
 body.dark #pan-center-mark .pcm-halo{stroke:rgba(0,0,0,.55)}
 body.dark #pan-center-mark .pcm-line{stroke:#a9bccd}
 body.dark #pan-center-mark .pcm-dot{fill:#a9bccd;stroke:rgba(0,0,0,.55)}
+/* ---- Theme: sepia (warm paper, light) ---- */
+body.sepia{
+  --color-background-primary: #faf3e0;
+  --color-background-secondary: #efe4c8;
+  --color-background-info: #e4dcb8;
+  --color-background-danger: #f3dcd2;
+  --color-text-primary: #3b2f1e;
+  --color-text-secondary: #6f5f47;
+  --color-text-tertiary: #9c8c72;
+  --color-text-info: #5b4a1c;
+  --color-text-success: #3d5a2a;
+  --color-text-danger: #8a3b24;
+  --color-border-tertiary: rgba(80,55,20,.15);
+  --color-border-secondary: rgba(80,55,20,.28);
+  --color-border-primary: rgba(80,55,20,.40);
+  --color-border-info: #c9b57a;
+  --color-edge: #a89878;
+  --edge-red:#b8472f;--edge-orange:#c8782a;--edge-green:#5a8a3a;--edge-blue:#3f74a8;--edge-purple:#7a5a9a;--edge-pink:#b8507a;--edge-black:#4a3d2a;
+}
+/* ---- Theme: navy (deep blue, dark) ---- */
+body.navy{
+  --color-background-primary: #0e1a2f;
+  --color-background-secondary: #16253f;
+  --color-background-info: #12365c;
+  --color-background-danger: #3a1620;
+  --color-text-primary: #dce6f5;
+  --color-text-secondary: #9fb2cf;
+  --color-text-tertiary: #61769a;
+  --color-text-info: #8fc2ff;
+  --color-text-success: #5fd3b0;
+  --color-text-danger: #ff9aa8;
+  --color-border-tertiary: rgba(150,190,255,.12);
+  --color-border-secondary: rgba(150,190,255,.20);
+  --color-border-primary: rgba(150,190,255,.30);
+  --color-border-info: #2c6db5;
+  --color-edge: #5f7aa3;
+  --edge-red:#f08080;--edge-orange:#f2a65a;--edge-green:#6fd09a;--edge-blue:#6aaeff;--edge-purple:#a99aff;--edge-pink:#f08ab8;--edge-black:#d6e0f0;
+}
+body.sepia #pan-center-mark .pcm-halo{stroke:rgba(255,250,235,.85)}
+body.sepia #pan-center-mark .pcm-line{stroke:#7a5f3a}
+body.sepia #pan-center-mark .pcm-dot{fill:#7a5f3a;stroke:rgba(255,250,235,.85)}
+body.navy #pan-center-mark .pcm-halo{stroke:rgba(0,0,0,.55)}
+body.navy #pan-center-mark .pcm-line{stroke:#9fc2ee}
+body.navy #pan-center-mark .pcm-dot{fill:#9fc2ee;stroke:rgba(0,0,0,.55)}
 #pan-center-mark svg{display:block;width:100%;height:100%;overflow:visible}
 #canvas.pan-lock .node-el,#canvas.pan-lock .img-node-el,#canvas.pan-lock .group-node-el{cursor:grab}
 #canvas.pan-lock.grabbing .node-el,#canvas.pan-lock.grabbing .img-node-el,#canvas.pan-lock.grabbing .group-node-el{cursor:grabbing}
@@ -177,6 +221,8 @@ button:active:not(:disabled){transform:translateY(0) scale(.94);box-shadow:none;
 button:disabled{opacity:.35;cursor:not-allowed}
 button.active{background:var(--color-background-info);border-color:var(--color-border-info);color:var(--color-text-info)}
 #theme-icon{display:inline-block;transition:transform .1s}
+/* header buttons never wrap or shrink (the hint text absorbs the squeeze instead) */
+#btn-zoom-anim,#btn-pan-marker,#btn-theme{white-space:nowrap;flex-shrink:0}
 .theme-spin{animation:themeSpin .5s var(--ease-bounce)}
 button.danger:hover{background:var(--color-background-danger);color:var(--color-text-danger)}
 .sep{width:0.5px;height:20px;background:var(--color-border-tertiary);margin:0 2px;flex-shrink:0}
@@ -285,7 +331,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | C: 拡大率を100%に | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.67</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.68</span>
     <button id="btn-zoom-anim" class="zoom-anim-btn active" type="button" aria-pressed="true" style="margin-left:8px;padding:4px 10px;font-size:12px" title="ズームのアニメーション：ON（クリックで切り替え／Cキーと拡大率の直接入力が対象）">アニメ</button>
     <button id="btn-pan-marker" class="zoom-anim-btn active" type="button" aria-pressed="true" style="margin-left:6px;padding:4px 10px;font-size:12px" title="パン中の中心マーカー：ON（クリックまたはShift+Tで切り替え）">マーカー</button>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:6px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
@@ -612,8 +658,48 @@ const COLORS_DARK=[
   {bg:'#3D0A20',border:'#C4527A',text:'#F0AABF'},
   {bg:'#0F2A04',border:'#5FAA2A',text:'#B3E88A'},
 ];
+const COLORS_SEPIA=[
+  {bg:'#E4EBD2',border:'#5A7A3A',text:'#3A5222'},
+  {bg:'#DDE6E6',border:'#3F6F86',text:'#264A5C'},
+  {bg:'#F3E2B8',border:'#9A6A18',text:'#6A4510'},
+  {bg:'#F2DACB',border:'#A24A2A',text:'#7A3018'},
+  {bg:'#E6DDE6',border:'#76508A',text:'#522F66'},
+  {bg:'#E7DFD0',border:'#7A6C58',text:'#4E4436'},
+  {bg:'#F1D9DC',border:'#A8445A',text:'#7A2A40'},
+  {bg:'#E9E6C4',border:'#7A7A22',text:'#525210'},
+];
+const COLORS_NAVY=[
+  {bg:'#0A3A44',border:'#2BB5A0',text:'#A8F0E2'},
+  {bg:'#0C2F5C',border:'#3C8CE0',text:'#BBD9FF'},
+  {bg:'#4A3510',border:'#D6A030',text:'#FFE0A0'},
+  {bg:'#4F2218',border:'#E0704A',text:'#FFCDBC'},
+  {bg:'#2A2468',border:'#7A6CF0',text:'#D6D0FF'},
+  {bg:'#1F2D45',border:'#6C84AA',text:'#D0DCF0'},
+  {bg:'#4A1A3A',border:'#D65FA0',text:'#FFB8DC'},
+  {bg:'#1C3A1E',border:'#5FC060',text:'#BFF0B0'},
+];
+// Themes: light (default) / dark / sepia / navy. The theme is a class on <body>
+// (none for light); colours come from CSS variables plus a node palette per theme.
+const THEMES=['light','dark','sepia','navy'];
+const THEME_INFO={
+  light:{label:'ライト',icon:'ti-sun'},
+  dark:{label:'ダーク',icon:'ti-moon'},
+  sepia:{label:'セピア',icon:'ti-book'},
+  navy:{label:'ネイビー',icon:'ti-moon-stars'}
+};
+function currentTheme(){
+  const cl=document.body.classList;
+  return cl.contains('dark')?'dark':cl.contains('sepia')?'sepia':cl.contains('navy')?'navy':'light';
+}
+function setTheme(t){
+  document.body.classList.remove('dark','sepia','navy');
+  if(t!=='light'&&THEMES.indexOf(t)>=0)document.body.classList.add(t);
+}
 function isDark(){return document.body.classList.contains('dark');}
-function getColors(){return isDark()?COLORS_DARK:COLORS;}
+function getColors(){
+  const t=currentTheme();
+  return t==='dark'?COLORS_DARK:t==='sepia'?COLORS_SEPIA:t==='navy'?COLORS_NAVY:COLORS;
+}
 
 // nodes: {id, type:'text'|'image'|'group', x, y, colorIdx, isRoot, text}  (text nodes)
 //        {id, type:'image', x, y, src, comment}                    (image nodes)
@@ -4426,7 +4512,7 @@ function generatePublicHtml(){
   } else {
     mapData=serialize();
   }
-  const isDarkNow=isDark();
+  const exportTheme=currentTheme();
 
   const publicScript=`
 const COLORS_L=[
@@ -4449,7 +4535,45 @@ const COLORS_D=[
   {bg:'#3D0A20',border:'#C4527A',text:'#F0AABF'},
   {bg:'#0F2A04',border:'#5FAA2A',text:'#B3E88A'},
 ];
-function getColors(){return document.body.classList.contains('dark')?COLORS_D:COLORS_L;}
+const COLORS_S=[
+  {bg:'#E4EBD2',border:'#5A7A3A',text:'#3A5222'},
+  {bg:'#DDE6E6',border:'#3F6F86',text:'#264A5C'},
+  {bg:'#F3E2B8',border:'#9A6A18',text:'#6A4510'},
+  {bg:'#F2DACB',border:'#A24A2A',text:'#7A3018'},
+  {bg:'#E6DDE6',border:'#76508A',text:'#522F66'},
+  {bg:'#E7DFD0',border:'#7A6C58',text:'#4E4436'},
+  {bg:'#F1D9DC',border:'#A8445A',text:'#7A2A40'},
+  {bg:'#E9E6C4',border:'#7A7A22',text:'#525210'},
+];
+const COLORS_N=[
+  {bg:'#0A3A44',border:'#2BB5A0',text:'#A8F0E2'},
+  {bg:'#0C2F5C',border:'#3C8CE0',text:'#BBD9FF'},
+  {bg:'#4A3510',border:'#D6A030',text:'#FFE0A0'},
+  {bg:'#4F2218',border:'#E0704A',text:'#FFCDBC'},
+  {bg:'#2A2468',border:'#7A6CF0',text:'#D6D0FF'},
+  {bg:'#1F2D45',border:'#6C84AA',text:'#D0DCF0'},
+  {bg:'#4A1A3A',border:'#D65FA0',text:'#FFB8DC'},
+  {bg:'#1C3A1E',border:'#5FC060',text:'#BFF0B0'},
+];
+var THEMES=['light','dark','sepia','navy'];
+var THEME_INFO={
+  light:{label:'ライト',icon:'ti-sun'},
+  dark:{label:'ダーク',icon:'ti-moon'},
+  sepia:{label:'セピア',icon:'ti-book'},
+  navy:{label:'ネイビー',icon:'ti-moon-stars'}
+};
+function currentTheme(){
+  var cl=document.body.classList;
+  return cl.contains('dark')?'dark':cl.contains('sepia')?'sepia':cl.contains('navy')?'navy':'light';
+}
+function setTheme(t){
+  document.body.classList.remove('dark','sepia','navy');
+  if(t!=='light'&&THEMES.indexOf(t)>=0)document.body.classList.add(t);
+}
+function getColors(){
+  var t=currentTheme();
+  return t==='dark'?COLORS_D:t==='sepia'?COLORS_S:t==='navy'?COLORS_N:COLORS_L;
+}
 
 const RAW=${JSON.stringify(mapData)};
 
@@ -5902,12 +6026,29 @@ document.addEventListener('keydown',e=>{
 
 // Theme
 (function(){
-  const saved=localStorage.getItem('mindmap-theme');
-  const prefersDark=window.matchMedia('(prefers-color-scheme: dark)').matches;
-  if(saved==='dark'||(saved===null&&${isDarkNow?'true':'prefersDark'})){document.body.classList.add('dark');}
-  function updateBtn(){const d=document.body.classList.contains('dark');document.getElementById('theme-icon').className=d?'ti ti-sun':'ti ti-moon';document.getElementById('theme-label').textContent=d?'ライト':'ダーク';}
+  var saved=localStorage.getItem('mindmap-theme');
+  var t=THEMES.indexOf(saved)>=0?saved:null;
+  if(t===null){
+    // No saved choice: use the theme the map was exported with; a light export follows the system preference
+    t='${exportTheme}';
+    if(t==='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches)t='dark';
+  }
+  setTheme(t);
+  function nextTheme(x){return THEMES[(THEMES.indexOf(x)+1)%THEMES.length];}
+  function updateBtn(){
+    var cur=currentTheme(),info=THEME_INFO[cur],nx=THEME_INFO[nextTheme(cur)];
+    document.getElementById('theme-icon').className='ti '+info.icon;
+    document.getElementById('theme-label').textContent=info.label;
+    document.getElementById('btn-theme').title='テーマ切り替え：現在「'+info.label+'」（クリックで「'+nx.label+'」へ）';
+  }
   updateBtn();
-  document.getElementById('btn-theme').addEventListener('click',()=>{document.body.classList.toggle('dark');localStorage.setItem('mindmap-theme',document.body.classList.contains('dark')?'dark':'light');updateBtn();renderAll();const icon=document.getElementById('theme-icon');icon.classList.remove('theme-spin');void icon.offsetWidth;icon.classList.add('theme-spin');});
+  document.getElementById('btn-theme').addEventListener('click',function(){
+    var n=nextTheme(currentTheme());
+    setTheme(n);
+    localStorage.setItem('mindmap-theme',n);
+    updateBtn();renderAll();
+    var icon=document.getElementById('theme-icon');icon.classList.remove('theme-spin');void icon.offsetWidth;icon.classList.add('theme-spin');
+  });
 })();
 
 // Init
@@ -5969,6 +6110,50 @@ html,body{height:100%;background:var(--color-background-secondary);color:var(--c
 body.dark #pan-center-mark .pcm-halo{stroke:rgba(0,0,0,.55)}
 body.dark #pan-center-mark .pcm-line{stroke:#a9bccd}
 body.dark #pan-center-mark .pcm-dot{fill:#a9bccd;stroke:rgba(0,0,0,.55)}
+/* ---- Theme: sepia (warm paper, light) ---- */
+body.sepia{
+  --color-background-primary: #faf3e0;
+  --color-background-secondary: #efe4c8;
+  --color-background-info: #e4dcb8;
+  --color-background-danger: #f3dcd2;
+  --color-text-primary: #3b2f1e;
+  --color-text-secondary: #6f5f47;
+  --color-text-tertiary: #9c8c72;
+  --color-text-info: #5b4a1c;
+  --color-text-success: #3d5a2a;
+  --color-text-danger: #8a3b24;
+  --color-border-tertiary: rgba(80,55,20,.15);
+  --color-border-secondary: rgba(80,55,20,.28);
+  --color-border-primary: rgba(80,55,20,.40);
+  --color-border-info: #c9b57a;
+  --color-edge: #a89878;
+  --edge-red:#b8472f;--edge-orange:#c8782a;--edge-green:#5a8a3a;--edge-blue:#3f74a8;--edge-purple:#7a5a9a;--edge-pink:#b8507a;--edge-black:#4a3d2a;
+}
+/* ---- Theme: navy (deep blue, dark) ---- */
+body.navy{
+  --color-background-primary: #0e1a2f;
+  --color-background-secondary: #16253f;
+  --color-background-info: #12365c;
+  --color-background-danger: #3a1620;
+  --color-text-primary: #dce6f5;
+  --color-text-secondary: #9fb2cf;
+  --color-text-tertiary: #61769a;
+  --color-text-info: #8fc2ff;
+  --color-text-success: #5fd3b0;
+  --color-text-danger: #ff9aa8;
+  --color-border-tertiary: rgba(150,190,255,.12);
+  --color-border-secondary: rgba(150,190,255,.20);
+  --color-border-primary: rgba(150,190,255,.30);
+  --color-border-info: #2c6db5;
+  --color-edge: #5f7aa3;
+  --edge-red:#f08080;--edge-orange:#f2a65a;--edge-green:#6fd09a;--edge-blue:#6aaeff;--edge-purple:#a99aff;--edge-pink:#f08ab8;--edge-black:#d6e0f0;
+}
+body.sepia #pan-center-mark .pcm-halo{stroke:rgba(255,250,235,.85)}
+body.sepia #pan-center-mark .pcm-line{stroke:#7a5f3a}
+body.sepia #pan-center-mark .pcm-dot{fill:#7a5f3a;stroke:rgba(255,250,235,.85)}
+body.navy #pan-center-mark .pcm-halo{stroke:rgba(0,0,0,.55)}
+body.navy #pan-center-mark .pcm-line{stroke:#9fc2ee}
+body.navy #pan-center-mark .pcm-dot{fill:#9fc2ee;stroke:rgba(0,0,0,.55)}
 #pan-center-mark svg{display:block;width:100%;height:100%;overflow:visible}
 #svg-layer{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:5}
 .node-el{position:absolute;transform:translate(-50%,-50%);cursor:pointer;z-index:10}
@@ -6011,6 +6196,8 @@ button:active:not(:disabled){transform:translateY(0) scale(.94);box-shadow:none;
 button:disabled{opacity:.35;cursor:not-allowed}
 button.active{background:var(--color-background-info);border-color:var(--color-border-info);color:var(--color-text-info)}
 #theme-icon{display:inline-block;transition:transform .1s}
+/* header buttons never wrap or shrink (the hint text absorbs the squeeze instead) */
+#btn-zoom-anim,#btn-pan-marker,#btn-theme{white-space:nowrap;flex-shrink:0}
 .theme-spin{animation:themeSpin .5s var(--ease-bounce)}
 .sep{width:0.5px;height:20px;background:var(--color-border-tertiary);margin:0 2px}
 #toast{position:absolute;bottom:22px;left:50%;overflow:hidden;
@@ -6199,21 +6386,27 @@ window.addEventListener('beforeunload',e=>{
 
 // ── Theme toggle ─────────────────────────────────────────
 (function(){
-  // Initialise from localStorage or system preference
+  // Initialise from localStorage (light/dark/sepia/navy) or the system preference
   const saved=localStorage.getItem('mindmap-theme');
-  const prefersDark=window.matchMedia('(prefers-color-scheme: dark)').matches;
-  if(saved==='dark'||(saved===null&&prefersDark)){
-    document.body.classList.add('dark');
+  if(THEMES.indexOf(saved)>=0){
+    setTheme(saved);
+  }else if(window.matchMedia('(prefers-color-scheme: dark)').matches){
+    setTheme('dark');
   }
+  // The button shows the CURRENT theme; each click goes to the next one:
+  // light -> dark -> sepia -> navy -> light
+  function nextTheme(t){return THEMES[(THEMES.indexOf(t)+1)%THEMES.length];}
   function updateBtn(){
-    const dark=isDark();
-    document.getElementById('theme-icon').className=dark?'ti ti-sun':'ti ti-moon';
-    document.getElementById('theme-label').textContent=dark?'ライト':'ダーク';
+    const t=currentTheme(), info=THEME_INFO[t], nx=THEME_INFO[nextTheme(t)];
+    document.getElementById('theme-icon').className='ti '+info.icon;
+    document.getElementById('theme-label').textContent=info.label;
+    document.getElementById('btn-theme').title='テーマ切り替え：現在「'+info.label+'」（クリックで「'+nx.label+'」へ）';
   }
   updateBtn();
   document.getElementById('btn-theme').addEventListener('click',()=>{
-    document.body.classList.toggle('dark');
-    localStorage.setItem('mindmap-theme',isDark()?'dark':'light');
+    const t=nextTheme(currentTheme());
+    setTheme(t);
+    localStorage.setItem('mindmap-theme',t);
     updateBtn();
     renderAll(); // re-render nodes with updated colours
     const icon=document.getElementById('theme-icon');
