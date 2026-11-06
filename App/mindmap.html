@@ -331,7 +331,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | C: 拡大率を100%に | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.68</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.69</span>
     <button id="btn-zoom-anim" class="zoom-anim-btn active" type="button" aria-pressed="true" style="margin-left:8px;padding:4px 10px;font-size:12px" title="ズームのアニメーション：ON（クリックで切り替え／Cキーと拡大率の直接入力が対象）">アニメ</button>
     <button id="btn-pan-marker" class="zoom-anim-btn active" type="button" aria-pressed="true" style="margin-left:6px;padding:4px 10px;font-size:12px" title="パン中の中心マーカー：ON（クリックまたはShift+Tで切り替え）">マーカー</button>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:6px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
@@ -3681,8 +3681,18 @@ document.addEventListener('keydown',e=>{
         showToast('🔍 表示中のノードがありません');
       }
     }else{
-      animateZoomTo(1);
-      showToast('🔍 拡大率を100%に戻しました');
+      // Back to 100%: if a visible node is selected, bring it to the screen
+      // centre while zooming; with no (visible) selection just zoom about the
+      // current centre as before.
+      const selNode=(selected!==null)?nodes.find(n=>n.id===selected):null;
+      const selEl=selNode?document.getElementById('node-'+selNode.id):null;
+      if(selNode&&selEl&&!selEl.classList.contains('hidden')){
+        animateFitView({scale:1,cx:selNode.x,cy:selNode.y});
+        showToast('🔍 拡大率を100%に戻し、選択中のノードを中央に表示しました');
+      }else{
+        animateZoomTo(1);
+        showToast('🔍 拡大率を100%に戻しました');
+      }
     }
   }
 
@@ -4935,6 +4945,7 @@ function renderAll(){
         el.addEventListener('click',e=>{
           e.stopPropagation();
           if((e.ctrlKey||e.metaKey)&&e.shiftKey){jumpToDuplicateNode(n);return;}
+          if(!didPan&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey)selectNode(n.id);
         });
         el.addEventListener('dblclick',e=>{
           e.stopPropagation();
@@ -4953,6 +4964,7 @@ function renderAll(){
         el.addEventListener('click',e=>{
           e.stopPropagation();
           if((e.ctrlKey||e.metaKey)&&e.shiftKey){jumpToDuplicateNode(n);return;}
+          if(!didPan&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey)selectNode(n.id);
         });
         el.addEventListener('dblclick',e=>{
           e.stopPropagation();
@@ -5018,7 +5030,7 @@ function renderAll(){
       }
     }
   });
-  renderEdges();applyHoverHighlight();updateZoomDisplay();
+  renderEdges();applyHoverHighlight();applySelection();updateZoomDisplay();
   _visMemo=null;
 }
 let _renderAllScheduled=false;
@@ -5507,6 +5519,32 @@ canvas.addEventListener('mousedown',e=>{
   isPanning=true;didPan=false;canvas.classList.add('grabbing');
   panStart={x:e.clientX-panX,y:e.clientY-panY};
 });
+// ---- Selected node (click to select) ----
+// Only used by the C key: going back to 100% brings the selected node to the
+// screen centre, like the editor. A plain click on a node selects it (an
+// outline is shown); a plain click on empty canvas clears it. A click that
+// ends a pan drag never selects or clears anything (didPan).
+let selected=null;
+function selectionBox(id){
+  const el=document.getElementById('node-'+id);
+  return el?el.querySelector('.node-box,.img-node-wrap,.group-box'):null;
+}
+function selectNode(id){
+  if(selected!==null){const ob=selectionBox(selected);if(ob)ob.classList.remove('selected');}
+  selected=id;
+  if(selected!==null){const nb=selectionBox(selected);if(nb)nb.classList.add('selected');}
+}
+// renderAll() rebuilds every node's markup, so put the outline back afterwards
+function applySelection(){
+  if(selected===null)return;
+  const b=selectionBox(selected);
+  if(b)b.classList.add('selected');
+}
+canvas.addEventListener('click',e=>{
+  if(didPan)return;
+  if(e.ctrlKey||e.metaKey||e.shiftKey)return;
+  selectNode(null);
+});
 const panCenterMark=document.getElementById('pan-center-mark');
 // Shift+T switches the marker on/off; the choice is remembered (default ON).
 let panMarkerEnabled=true;
@@ -5954,8 +5992,18 @@ document.addEventListener('keydown',e=>{
         showToast('🔍 表示中のノードがありません');
       }
     }else{
-      animateZoomTo(1);
-      showToast('🔍 拡大率を100%に戻しました');
+      // Back to 100%: if a visible node is selected, bring it to the screen
+      // centre while zooming; with no (visible) selection just zoom about the
+      // current centre as before.
+      const selNode=(selected!==null)?nodes.find(n=>n.id===selected):null;
+      const selEl=selNode?document.getElementById('node-'+selNode.id):null;
+      if(selNode&&selEl&&!selEl.classList.contains('hidden')){
+        animateFitView({scale:1,cx:selNode.x,cy:selNode.y});
+        showToast('🔍 拡大率を100%に戻し、選択中のノードを中央に表示しました');
+      }else{
+        animateZoomTo(1);
+        showToast('🔍 拡大率を100%に戻しました');
+      }
     }
   }
   if(e.key==='x'&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey){
@@ -6182,6 +6230,9 @@ body.navy #pan-center-mark .pcm-dot{fill:#9fc2ee;stroke:rgba(0,0,0,.55)}
 .img-node-caption.pos-top{border-top:none;border-bottom:0.5px solid var(--color-border-tertiary);border-radius:12px 12px 0 0}
 .search-hit{outline:2.5px solid #f5a623!important;outline-offset:3px}
 .search-current{outline:3px solid #e8430a!important;outline-offset:3px}
+.node-box.selected{outline:2.5px solid var(--color-text-info);outline-offset:2px}
+.img-node-wrap.selected{outline:2.5px solid var(--color-text-info);outline-offset:2px;border-radius:12px}
+.group-box.selected{outline:2.5px solid var(--color-text-info);outline-offset:2px}
 .node-box.hover-self,.img-node-wrap.hover-self{outline:2.5px solid #f5a100;outline-offset:3px;box-shadow:0 0 0 4px rgba(245,161,0,.15);transform:scale(1.045)}
 .node-box.hover-parent,.img-node-wrap.hover-parent{outline:2.5px solid #2196f3;outline-offset:3px;box-shadow:0 0 0 4px rgba(33,150,243,.15);transform:scale(1.02)}
 .node-box.hover-child,.img-node-wrap.hover-child{outline:2.5px solid #4caf50;outline-offset:3px;box-shadow:0 0 0 4px rgba(76,175,80,.15);transform:scale(1.02)}
