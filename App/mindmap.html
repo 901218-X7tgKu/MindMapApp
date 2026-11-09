@@ -314,7 +314,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | C: 拡大率を100%に | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.70</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.71</span>
     <button id="btn-zoom-anim" class="zoom-anim-btn active" type="button" aria-pressed="true" style="margin-left:8px;padding:4px 10px;font-size:12px" title="ズームのアニメーション：ON（クリックで切り替え／Cキーと拡大率の直接入力が対象）">アニメ</button>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:6px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
@@ -2679,6 +2679,22 @@ function startInlineEdit(n){
 }
 let dropChoiceData=null;
 // Plays the pop-out animation on a modal/overlay before hiding it.
+// Close a modal by clicking its dark backdrop, but only when the whole click
+// (press AND release) happened on the backdrop itself. Without this, selecting
+// text inside the modal and letting the pointer leave the modal before
+// releasing the button produces a click whose target is the backdrop (the
+// common ancestor), which used to close the modal and lose the edits.
+function bindBackdropClose(el,closeFn){
+  if(!el)return;
+  let downOnBackdrop=false,upOnBackdrop=false;
+  el.addEventListener('mousedown',e=>{downOnBackdrop=(e.target===el);upOnBackdrop=false;});
+  el.addEventListener('mouseup',e=>{upOnBackdrop=(e.target===el);});
+  el.addEventListener('click',e=>{
+    const ok=(e.target===el)&&downOnBackdrop&&upOnBackdrop;
+    downOnBackdrop=false;upOnBackdrop=false;
+    if(ok)closeFn();
+  });
+}
 function closeOverlay(el, delay){
   if(!el.classList.contains('show'))return;
   el.classList.add('closing');
@@ -2793,9 +2809,7 @@ function showUrlChoice(urls){
 }
 function closeUrlChoice(){closeOverlay(document.getElementById('url-choice-overlay'));}
 document.getElementById('url-choice-close').addEventListener('click',closeUrlChoice);
-document.getElementById('url-choice-overlay').addEventListener('click',e=>{
-  if(e.target.id==='url-choice-overlay')closeUrlChoice();
-});
+bindBackdropClose(document.getElementById('url-choice-overlay'),()=>closeUrlChoice());
 document.addEventListener('keydown',e=>{
   const ov=document.getElementById('url-choice-overlay');
   if(!ov||!ov.classList.contains('show')||ov.classList.contains('closing'))return;
@@ -3037,7 +3051,7 @@ function saveNodeModal(){
 }
 document.getElementById('node-modal-save').addEventListener('click',saveNodeModal);
 document.getElementById('node-modal-cancel').addEventListener('click',()=>closeOverlay(nodeModal));
-nodeModal.addEventListener('click',e=>{if(e.target===nodeModal)closeOverlay(nodeModal);});
+bindBackdropClose(nodeModal,()=>closeOverlay(nodeModal));
 // Shift+Enter to save / Escape to cancel — works no matter which element
 // inside the modal currently has focus (textarea, inputs, slider, or a
 // button reached via Tab), matching the behaviour of the former image modal.
@@ -3136,7 +3150,7 @@ document.getElementById('edge-modal-delete').addEventListener('click',()=>{
   if(ed)deleteEdge(ed);
 });
 document.getElementById('edge-modal-cancel').addEventListener('click',()=>closeOverlay(edgeModal));
-edgeModal.addEventListener('click',e=>{if(e.target===edgeModal)closeOverlay(edgeModal);});
+bindBackdropClose(edgeModal,()=>closeOverlay(edgeModal));
 edgeModalInput.addEventListener('keydown',e=>{
   if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();e.stopPropagation();saveEdgeModal();}
   else if(e.key==='Escape'){e.preventDefault();e.stopPropagation();closeOverlay(edgeModal);}
@@ -3301,9 +3315,7 @@ function closeTagStatusOverlay(){
   closeOverlay(document.getElementById('tag-status-overlay'));
 }
 document.getElementById('tag-status-close').addEventListener('click',closeTagStatusOverlay);
-document.getElementById('tag-status-overlay').addEventListener('click',e=>{
-  if(e.target.id==='tag-status-overlay')closeTagStatusOverlay();
-});
+bindBackdropClose(document.getElementById('tag-status-overlay'),()=>closeTagStatusOverlay());
 
 function runSearchFromTagStatus(q, filterKey){
   // クリックした種別（タグ or ステータス）のみを検索対象にするため、
@@ -4776,9 +4788,7 @@ function showUrlChoice(urls){
 }
 function closeUrlChoice(){document.getElementById('url-choice-overlay').classList.remove('show');}
 document.getElementById('url-choice-close').addEventListener('click',closeUrlChoice);
-document.getElementById('url-choice-overlay').addEventListener('click',e=>{
-  if(e.target.id==='url-choice-overlay')closeUrlChoice();
-});
+bindBackdropClose(document.getElementById('url-choice-overlay'),()=>closeUrlChoice());
 document.addEventListener('keydown',e=>{
   const ov=document.getElementById('url-choice-overlay');
   if(!ov||!ov.classList.contains('show')||ov.classList.contains('closing'))return;
@@ -4835,6 +4845,29 @@ function openAttrModal(n){
   document.getElementById('attr-modal-status').innerHTML='<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:4px;margin-top:8px">ステータス</div>'+statusHtml;
   document.getElementById('attr-modal').classList.add('show');
 }
+// Close a modal by clicking its dark backdrop, but only when the whole click
+// (press AND release) happened on the backdrop itself. Without this, selecting
+// text inside the modal and letting the pointer leave the modal before
+// releasing the button produces a click whose target is the backdrop (the
+// common ancestor), which used to close the modal and lose the edits.
+function bindBackdropClose(el,closeFn){
+  if(!el)return;
+  let downOnBackdrop=false,upOnBackdrop=false;
+  el.addEventListener('mousedown',e=>{downOnBackdrop=(e.target===el);upOnBackdrop=false;});
+  el.addEventListener('mouseup',e=>{upOnBackdrop=(e.target===el);});
+  el.addEventListener('click',e=>{
+    const ok=(e.target===el)&&downOnBackdrop&&upOnBackdrop;
+    downOnBackdrop=false;upOnBackdrop=false;
+    if(ok)closeFn();
+  });
+}
+// The public modals (node info / URL choice / tag-status list) live inside
+// #canvas, so mouse events inside them also reach the canvas handlers. Events
+// that originate in a modal must never pan the view or change the selection.
+function inModalOverlay(e){
+  const t=e.target;
+  return !!(t&&t.closest&&t.closest('.attr-modal-overlay'));
+}
 function closeAttrModal(){document.getElementById('attr-modal').classList.remove('show');}
 // Right-click copies a node's content (text body / image comment / group
 // title — same thing "same-content jump" treats as the node's content) to
@@ -4871,7 +4904,7 @@ function copyTextToClipboard(content){
   }
 }
 document.getElementById('attr-modal-close').addEventListener('click',closeAttrModal);
-document.getElementById('attr-modal').addEventListener('click',e=>{if(e.target.id==='attr-modal')closeAttrModal();});
+bindBackdropClose(document.getElementById('attr-modal'),()=>closeAttrModal());
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeAttrModal();});
 
 function renderAll(){
@@ -5458,6 +5491,7 @@ function renderEdges(){
 let didPan=false;
 canvas.addEventListener('mousedown',e=>{
   if(e.button!==0)return;
+  if(inModalOverlay(e))return;
   // Plain left-drag pans the view unconditionally, even when starting on
   // top of a node or group — node interaction here is limited to
   // double-click (expand/collapse), right-click (attributes), and
@@ -5488,6 +5522,7 @@ function applySelection(){
   if(b)b.classList.add('selected');
 }
 canvas.addEventListener('click',e=>{
+  if(inModalOverlay(e))return;
   if(didPan)return;
   if(e.ctrlKey||e.metaKey||e.shiftKey)return;
   selectNode(null);
@@ -5579,9 +5614,7 @@ function getStatusTagCounts(){
 }
 function closeTagStatusOverlay(){document.getElementById('tag-status-overlay').classList.remove('show');}
 document.getElementById('tag-status-close').addEventListener('click',closeTagStatusOverlay);
-document.getElementById('tag-status-overlay').addEventListener('click',e=>{
-  if(e.target.id==='tag-status-overlay')closeTagStatusOverlay();
-});
+bindBackdropClose(document.getElementById('tag-status-overlay'),()=>closeTagStatusOverlay());
 function runSearchFromTagStatus(q, filterKey){
   Object.keys(searchFilters).forEach(k=>{searchFilters[k]=(k===filterKey);});
   Object.keys(searchFilterCheckboxMap).forEach(id=>{
@@ -6319,7 +6352,7 @@ document.getElementById('modal-save-btn').addEventListener('click',()=>{
 });
 
 document.getElementById('modal-close').addEventListener('click',()=>closeOverlay(saveModal));
-saveModal.addEventListener('click',e=>{if(e.target===saveModal)closeOverlay(saveModal);});
+bindBackdropClose(saveModal,()=>closeOverlay(saveModal));
 
 
 // ── Unsaved changes warning ───────────────────────────────
