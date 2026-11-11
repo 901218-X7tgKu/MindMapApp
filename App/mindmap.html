@@ -314,7 +314,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | C: 拡大率を100%に | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.71</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.72</span>
     <button id="btn-zoom-anim" class="zoom-anim-btn active" type="button" aria-pressed="true" style="margin-left:8px;padding:4px 10px;font-size:12px" title="ズームのアニメーション：ON（クリックで切り替え／Cキーと拡大率の直接入力が対象）">アニメ</button>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:6px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
@@ -922,7 +922,7 @@ function deserialize(text){
 function getDirectChildren(nodeId){
   return edges.filter(e=>e.from===nodeId).map(e=>nodes.find(n=>n.id===e.to)).filter(Boolean);
 }
-function hasChildren(nodeId){return edges.some(e=>e.from===nodeId);}
+function hasChildren(nodeId){return _childSet?_childSet.has(nodeId):edges.some(e=>e.from===nodeId);}
 function getAllDescendants(nodeId,result=new Set()){
   for(const e of edges){
     if(e.from===nodeId&&!result.has(e.to)){
@@ -930,6 +930,34 @@ function getAllDescendants(nodeId,result=new Set()){
     }
   }
   return result;
+}
+// ---- Per-render-pass graph index (performance) ----
+// renderAll() visits every node/edge, and several helpers used to answer
+// "who are this node's parents / does it have children / which node has this
+// id" by scanning the whole edges/nodes arrays each time, which made a render
+// grow roughly with (nodes x edges). Within ONE synchronous render pass
+// nothing mutates nodes/edges, so these lookups are indexed once up front
+// (same results, same order) and dropped again afterwards. Outside a pass the
+// helpers fall back to the plain scans, so behaviour is unchanged.
+let _nodeById=null,_parentsOf=null,_childSet=null,_edgeSizes=null;
+function buildGraphIndex(){
+  _nodeById=new Map();
+  nodes.forEach(n=>_nodeById.set(n.id,n));
+  _parentsOf=new Map();
+  _childSet=new Set();
+  edges.forEach(e=>{
+    _childSet.add(e.from);
+    let a=_parentsOf.get(e.to);
+    if(!a){a=[];_parentsOf.set(e.to,a);}
+    a.push(e.from);
+  });
+}
+function clearGraphIndex(){_nodeById=null;_parentsOf=null;_childSet=null;}
+// Node size for edge geometry: served from the pre-read cache while edges are
+// being drawn (see renderEdges), otherwise measured directly.
+function edgeNodeSize(el){
+  const sz=_edgeSizes&&_edgeSizes.get(el);
+  return sz||nodeScreenSize(el);
 }
 let _visMemo=null;
 function isNodeVisible(nodeId,memo){
@@ -959,10 +987,17 @@ function isNodeVisible(nodeId,memo){
   if(memo.has(nodeId))return memo.get(nodeId);
   memo.set(nodeId,true);
   let visible=true;
-  for(const e of edges){
-    if(e.to===nodeId){
-      const pid=e.from;
+  if(_parentsOf){
+    const ps=_parentsOf.get(nodeId);
+    if(ps)for(const pid of ps){
       if(collapsedNodes.has(pid)||!isNodeVisible(pid,memo)){visible=false;break;}
+    }
+  }else{
+    for(const e of edges){
+      if(e.to===nodeId){
+        const pid=e.from;
+        if(collapsedNodes.has(pid)||!isNodeVisible(pid,memo)){visible=false;break;}
+      }
     }
   }
   if(visible){
@@ -972,7 +1007,7 @@ function isNodeVisible(nodeId,memo){
     // disappears. This recurses naturally through nested groups too (a
     // group can itself be another group's member); the app never lets a
     // containment cycle form, so the recursion always terminates.
-    const n=nodes.find(nd=>nd.id===nodeId);
+    const n=_nodeById?_nodeById.get(nodeId):nodes.find(nd=>nd.id===nodeId);
     if(n&&n.groupId&&!isNodeVisible(n.groupId,memo))visible=false;
   }
   memo.set(nodeId,visible);
@@ -1527,8 +1562,13 @@ function renderAll(){
   // nodes/edges/collapsedNodes mid-render (this is synchronous, single-
   // threaded JS), so the cache can never go stale during the pass.
   _visMemo=new Map();
-  nodes.forEach(renderNode);renderEdges();applyHoverHighlight();updateZoomDisplay();
-  _visMemo=null;
+  buildGraphIndex();
+  try{
+    nodes.forEach(renderNode);renderEdges();applyHoverHighlight();updateZoomDisplay();
+  }finally{
+    clearGraphIndex();
+    _visMemo=null;
+  }
 }
 // Coalesces renderAll() calls that fire many times per mouse-move burst
 // (dragging a node, panning the canvas, resizing a group) down to at most
@@ -1741,7 +1781,28 @@ function edgeLabelPoint(p0x,p0y,p1x,p1y,p2x,p2y,rectA,rectB){
   }
   return seg[seg.length-1];
 }
+// Draws all edges. Every edge needs its two end nodes' on-screen sizes, and
+// reading a size (getBoundingClientRect) right after adding SVG elements forces
+// the browser to redo layout each time; interleaved per edge that cost grows
+// with the whole DOM, so it exploded on big maps. All sizes are therefore read
+// once up front (reads only, no writes in between) and served from that cache
+// while the edges are drawn. The values are identical to reading them live.
 function renderEdges(){
+  const ownIndex=!_nodeById;
+  if(ownIndex)buildGraphIndex();
+  _edgeSizes=new Map();
+  try{
+    nodes.forEach(n=>{
+      const el=document.getElementById('node-'+n.id);
+      if(el&&!el.classList.contains('hidden'))_edgeSizes.set(el,nodeScreenSize(el));
+    });
+    renderEdgesImpl();
+  }finally{
+    _edgeSizes=null;
+    if(ownIndex)clearGraphIndex();
+  }
+}
+function renderEdgesImpl(){
   svgEl.querySelectorAll('.edge,.edge-label,.edge-hit').forEach(p=>p.remove());
   // Approximate corner radius per node type, matching each node's own CSS
   // border-radius — a plain axis-aligned rectangle clip lands outside the
@@ -1921,7 +1982,7 @@ function renderEdges(){
     const tEl=document.getElementById('node-'+targetNode.id);
     let rect=null, srect=null;
     if(tEl){
-      const r=nodeScreenSize(tEl);
+      const r=edgeNodeSize(tEl);
       // Only give an arrowhead room to sit just outside the node (+4px); a
       // plain line with no marker should stop exactly at the node's edge —
       // where it always used to disappear behind an opaque node — instead
@@ -1936,7 +1997,7 @@ function renderEdges(){
     if(sourceNode&&!fixedEnd){
       const sEl=document.getElementById('node-'+sourceNode.id);
       if(sEl){
-        const sr=nodeScreenSize(sEl);
+        const sr=edgeNodeSize(sEl);
         // No padding here: no arrowhead is ever drawn at a source, so the
         // curve should stop flush with the node's own edge, not short of it.
         // Same half-stroke-width safety margin as the destination side,
@@ -2037,7 +2098,7 @@ function renderEdges(){
     function reach(nodeId){
       const el=document.getElementById('node-'+nodeId);
       if(!el)return 0;
-      const r=nodeScreenSize(el);
+      const r=edgeNodeSize(el);
       const hw=r.width/2+4, hh=r.height/2+4;
       if(Math.abs(dx)<=0.001&&Math.abs(dy)<=0.001)return 0;
       const tx=hw/Math.abs(dx), ty=hh/Math.abs(dy);
@@ -2078,7 +2139,7 @@ function renderEdges(){
     svgEl.appendChild(text);
   }
   edges.forEach(e=>{
-    const a=nodes.find(n=>n.id===e.from),b=nodes.find(n=>n.id===e.to);
+    const a=_nodeById.get(e.from),b=_nodeById.get(e.to);
     if(!a||!b)return;
     if(!isNodeVisible(a.id)||!isNodeVisible(b.id))return;
     const style=e.style||'arrow';
@@ -2101,7 +2162,7 @@ function renderEdges(){
     let aRect=null;
     const aEl=document.getElementById('node-'+a.id);
     if(aEl){
-      const r=nodeScreenSize(aEl);
+      const r=edgeNodeSize(aEl);
       aRect={cx:ax,cy:ay,hw:r.width/2+4,hh:r.height/2+4};
     }
     const seg=drawSegment(ax,ay,b,hasArrowEnd,dashArr,strokeW,style,e,undefined,a);
@@ -4664,7 +4725,7 @@ const canvas=document.getElementById('canvas');
 const svgEl=document.getElementById('svg-layer');
 const nodesLayer=document.getElementById('nodes-layer');
 
-function hasChildren(id){return edges.some(e=>e.from===id);}
+function hasChildren(id){return _childSet?_childSet.has(id):edges.some(e=>e.from===id);}
 function getDirectChildren(id){return edges.filter(e=>e.from===id).map(e=>nodes.find(n=>n.id===e.to)).filter(Boolean);}
 function toggleNodeCollapse(n){
   if(collapsed.has(n.id)){
@@ -4680,20 +4741,55 @@ function toggleNodeCollapse(n){
   }
   renderAll();
 }
+// ---- Per-render-pass graph index (performance) ----
+// renderAll() visits every node/edge, and several helpers used to answer
+// "who are this node's parents / does it have children / which node has this
+// id" by scanning the whole edges/nodes arrays each time, which made a render
+// grow roughly with (nodes x edges). Within ONE synchronous render pass
+// nothing mutates nodes/edges, so these lookups are indexed once up front
+// (same results, same order) and dropped again afterwards. Outside a pass the
+// helpers fall back to the plain scans, so behaviour is unchanged.
+let _nodeById=null,_parentsOf=null,_childSet=null,_edgeSizes=null;
+function buildGraphIndex(){
+  _nodeById=new Map();
+  nodes.forEach(n=>_nodeById.set(n.id,n));
+  _parentsOf=new Map();
+  _childSet=new Set();
+  edges.forEach(e=>{
+    _childSet.add(e.from);
+    let a=_parentsOf.get(e.to);
+    if(!a){a=[];_parentsOf.set(e.to,a);}
+    a.push(e.from);
+  });
+}
+function clearGraphIndex(){_nodeById=null;_parentsOf=null;_childSet=null;}
+// Node size for edge geometry: served from the pre-read cache while edges are
+// being drawn (see renderEdges), otherwise measured directly.
+function edgeNodeSize(el){
+  const sz=_edgeSizes&&_edgeSizes.get(el);
+  return sz||nodeScreenSize(el);
+}
 let _visMemo=null;
 function isVisible(id,memo){
   if(!memo)memo=_visMemo||(_visMemo=new Map());
   if(memo.has(id))return memo.get(id);
   memo.set(id,true);
   let visible=true;
-  for(const e of edges){
-    if(e.to===id){
-      const pid=e.from;
+  if(_parentsOf){
+    const ps=_parentsOf.get(id);
+    if(ps)for(const pid of ps){
       if(collapsed.has(pid)||!isVisible(pid,memo)){visible=false;break;}
+    }
+  }else{
+    for(const e of edges){
+      if(e.to===id){
+        const pid=e.from;
+        if(collapsed.has(pid)||!isVisible(pid,memo)){visible=false;break;}
+      }
     }
   }
   if(visible){
-    const n=nodes.find(nd=>nd.id===id);
+    const n=_nodeById?_nodeById.get(id):nodes.find(nd=>nd.id===id);
     if(n&&n.groupId&&!isVisible(n.groupId,memo))visible=false;
   }
   memo.set(id,visible);
@@ -4913,6 +5009,8 @@ function renderAll(){
   // for every node/edge, with no change in the result (synchronous, single-
   // threaded — nothing can mutate state mid-pass).
   _visMemo=new Map();
+  buildGraphIndex();
+  try{
   nodes.forEach(n=>{
     let el=document.getElementById('node-'+n.id);
     if(!el){
@@ -5011,7 +5109,10 @@ function renderAll(){
     }
   });
   renderEdges();applyHoverHighlight();applySelection();updateZoomDisplay();
-  _visMemo=null;
+  }finally{
+    clearGraphIndex();
+    _visMemo=null;
+  }
 }
 let _renderAllScheduled=false;
 function scheduleRenderAll(){
@@ -5214,7 +5315,28 @@ function edgeLabelPoint(p0x,p0y,p1x,p1y,p2x,p2y,rectA,rectB){
   }
   return seg[seg.length-1];
 }
+// Draws all edges. Every edge needs its two end nodes' on-screen sizes, and
+// reading a size (getBoundingClientRect) right after adding SVG elements forces
+// the browser to redo layout each time; interleaved per edge that cost grows
+// with the whole DOM, so it exploded on big maps. All sizes are therefore read
+// once up front (reads only, no writes in between) and served from that cache
+// while the edges are drawn. The values are identical to reading them live.
 function renderEdges(){
+  const ownIndex=!_nodeById;
+  if(ownIndex)buildGraphIndex();
+  _edgeSizes=new Map();
+  try{
+    nodes.forEach(n=>{
+      const el=document.getElementById('node-'+n.id);
+      if(el&&!el.classList.contains('hidden'))_edgeSizes.set(el,nodeScreenSize(el));
+    });
+    renderEdgesImpl();
+  }finally{
+    _edgeSizes=null;
+    if(ownIndex)clearGraphIndex();
+  }
+}
+function renderEdgesImpl(){
   svgEl.querySelectorAll('.edge,.edge-label').forEach(p=>p.remove());
   function nodeCornerRadius(node){
     if(node.type==='image')return 12;
@@ -5355,7 +5477,7 @@ function renderEdges(){
     const tEl=document.getElementById('node-'+targetNode.id);
     let rect=null, srect=null;
     if(tEl){
-      const r=nodeScreenSize(tEl);
+      const r=edgeNodeSize(tEl);
       // Even a mathematically exact boundary clip can leave a hair of the
       // stroke visible, since the line has real width straddling its own
       // path — nudge the clip in by half the stroke width as a safety
@@ -5366,7 +5488,7 @@ function renderEdges(){
     if(sourceNode&&!fixedEnd){
       const sEl=document.getElementById('node-'+sourceNode.id);
       if(sEl){
-        const sr=nodeScreenSize(sEl);
+        const sr=edgeNodeSize(sEl);
         const spad=-strokeW/2;
         srect={cx:sx,cy:sy,hw:sr.width/2+spad,hh:sr.height/2+spad,rad:nodeCornerRadius(sourceNode)*scale+spad};
       }
@@ -5411,7 +5533,7 @@ function renderEdges(){
     function reach(nodeId){
       const el=document.getElementById('node-'+nodeId);
       if(!el)return 0;
-      const r=nodeScreenSize(el);
+      const r=edgeNodeSize(el);
       const hw=r.width/2+4, hh=r.height/2+4;
       if(Math.abs(dx)<=0.001&&Math.abs(dy)<=0.001)return 0;
       const tx=hw/Math.abs(dx), ty=hh/Math.abs(dy);
@@ -5459,7 +5581,7 @@ function renderEdges(){
     svgEl.appendChild(text);
   }
   edges.forEach(e=>{
-    const a=nodes.find(n=>n.id===e.from),b=nodes.find(n=>n.id===e.to);
+    const a=_nodeById.get(e.from),b=_nodeById.get(e.to);
     if(!a||!b||!isVisible(a.id)||!isVisible(b.id))return;
     const style=e.style||'arrow';
     const isBoth=(style==='both-arrow'||style==='both-dashed-arrow');
@@ -5477,7 +5599,7 @@ function renderEdges(){
     let aRect=null;
     const aEl=document.getElementById('node-'+a.id);
     if(aEl){
-      const r=nodeScreenSize(aEl);
+      const r=edgeNodeSize(aEl);
       aRect={cx:ax,cy:ay,hw:r.width/2+4,hh:r.height/2+4};
     }
     const seg=drawSegment(ax,ay,b,hasArrowEnd,dashArr,strokeW,style,e,undefined,a);
