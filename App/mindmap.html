@@ -314,7 +314,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | C: 拡大率を100%に | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.72</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.73</span>
     <button id="btn-zoom-anim" class="zoom-anim-btn active" type="button" aria-pressed="true" style="margin-left:8px;padding:4px 10px;font-size:12px" title="ズームのアニメーション：ON（クリックで切り替え／Cキーと拡大率の直接入力が対象）">アニメ</button>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:6px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
@@ -1036,8 +1036,12 @@ function collapseAll(){
 }
 function expandSelectedDescendants(){
   if(selected==null){showToast('ノードを選択してください');return;}
-  const ids=getAllDescendantIds(selected);
-  ids.add(selected);
+  // Same "everything below this node" definition as Ctrl+Shift+L / group
+  // moves: edge descendants PLUS, for every group node reached, that group's
+  // members and the members' own descendants (and nested groups), closed
+  // transitively. Plain getAllDescendantIds() follows edges only, so folded
+  // branches hanging off a group's members used to stay folded.
+  const ids=getDeletionSetWithGroupMembers(selected);
   ids.forEach(id=>collapsedNodes.delete(id));
   renderAll();
 }
