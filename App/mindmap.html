@@ -314,7 +314,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | C: 拡大率を100%に | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.73</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.74</span>
     <button id="btn-zoom-anim" class="zoom-anim-btn active" type="button" aria-pressed="true" style="margin-left:8px;padding:4px 10px;font-size:12px" title="ズームのアニメーション：ON（クリックで切り替え／Cキーと拡大率の直接入力が対象）">アニメ</button>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:6px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
@@ -1657,7 +1657,7 @@ function animateZoomTo(targetScale){
     const e=t<0.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
     zoomAboutCenter(t>=1?targetScale:s0*Math.pow(ratio,e));
     if(t<1)anim.raf=requestAnimationFrame(step);
-    else _zoomAnim=null;
+    else{_zoomAnim=null;applyHoverHighlight();}
   };
   anim.raf=requestAnimationFrame(step);
 }
@@ -1718,7 +1718,7 @@ function animateFitView(fit){
     zoomAboutCenter(t>=1?target:s0*Math.pow(ratio,e),dwx*(pr-prev),dwy*(pr-prev));
     prev=pr;
     if(t<1)anim.raf=requestAnimationFrame(step);
-    else _zoomAnim=null;
+    else{_zoomAnim=null;applyHoverHighlight();}
   };
   anim.raf=requestAnimationFrame(step);
 }
@@ -2192,7 +2192,11 @@ function applyHoverHighlight(){
   // While a node is being dragged, its position updates one frame behind the
   // browser's mouse hit-test, which was causing hover-enter/leave to fire
   // repeatedly and the highlight to flicker on/off. Suppress it during drag.
-  if(dragNode!==null||isPanning)return;
+  // Likewise during the C-key / zoom-box animation: nodes slide under a
+  // stationary cursor, so mouseenter/mouseleave fire every few frames and
+  // the highlight flickers between nodes. Keep it cleared until the
+  // animation ends (the finishing frame re-applies it).
+  if(dragNode!==null||isPanning||_zoomAnim)return;
   if(hoveredNodeId===null)return;
 
   const parentIds=new Set(edges.filter(e=>e.to===hoveredNodeId).map(e=>e.from));
@@ -4823,7 +4827,10 @@ function applyHoverHighlight(){
   // cursor visibly jitter. Same guard as the editor: clear the highlight and
   // skip re-applying it until the pan ends (mouseup calls renderAll() with
   // isPanning already false, which restores the highlight).
-  if(isPanning)return;
+  // Same for the C-key / zoom-box animation: nodes slide under a stationary
+  // cursor and the highlight would flicker between them. Cleared until the
+  // animation ends (the finishing frame re-applies it).
+  if(isPanning||_zoomAnim)return;
   if(hoveredNodeId===null)return;
   const parentIds=new Set(edges.filter(e=>e.to===hoveredNodeId).map(e=>e.from));
   const childIds=new Set(edges.filter(e=>e.from===hoveredNodeId).map(e=>e.to));
@@ -5193,7 +5200,7 @@ function animateZoomTo(targetScale){
     const e=t<0.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
     zoomAboutCenter(t>=1?targetScale:s0*Math.pow(ratio,e));
     if(t<1)anim.raf=requestAnimationFrame(step);
-    else _zoomAnim=null;
+    else{_zoomAnim=null;applyHoverHighlight();}
   };
   anim.raf=requestAnimationFrame(step);
 }
@@ -5254,7 +5261,7 @@ function animateFitView(fit){
     zoomAboutCenter(t>=1?target:s0*Math.pow(ratio,e),dwx*(pr-prev),dwy*(pr-prev));
     prev=pr;
     if(t<1)anim.raf=requestAnimationFrame(step);
-    else _zoomAnim=null;
+    else{_zoomAnim=null;applyHoverHighlight();}
   };
   anim.raf=requestAnimationFrame(step);
 }
