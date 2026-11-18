@@ -314,7 +314,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | C: 拡大率を100%に | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.74</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.75</span>
     <button id="btn-zoom-anim" class="zoom-anim-btn active" type="button" aria-pressed="true" style="margin-left:8px;padding:4px 10px;font-size:12px" title="ズームのアニメーション：ON（クリックで切り替え／Cキーと拡大率の直接入力が対象）">アニメ</button>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:6px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
@@ -536,6 +536,15 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
             </button>
             <button type="button" class="edge-style-opt" data-style="both-dashed-arrow" title="破線＋両矢印">
               <svg width="40" height="14" viewBox="0 0 40 14"><line x1="12" y1="7" x2="28" y2="7" stroke="currentColor" stroke-width="2" stroke-dasharray="5,4"/><path d="M12 3 L4 7 L12 11 Z" fill="currentColor"/><path d="M28 3 L36 7 L28 11 Z" fill="currentColor"/></svg>
+            </button>
+            <button type="button" class="edge-style-opt" data-style="dotted-arrow" title="ドット線＋矢印">
+              <svg width="40" height="14" viewBox="0 0 40 14"><circle cx="3" cy="7" r="2.2" fill="currentColor"/><circle cx="9" cy="7" r="2.2" fill="currentColor"/><circle cx="15" cy="7" r="2.2" fill="currentColor"/><circle cx="21" cy="7" r="2.2" fill="currentColor"/><path d="M28 3 L36 7 L28 11 Z" fill="currentColor"/></svg>
+            </button>
+            <button type="button" class="edge-style-opt" data-style="dotted" title="ドット線（矢印なし）">
+              <svg width="40" height="14" viewBox="0 0 40 14"><circle cx="3" cy="7" r="2.2" fill="currentColor"/><circle cx="9" cy="7" r="2.2" fill="currentColor"/><circle cx="15" cy="7" r="2.2" fill="currentColor"/><circle cx="21" cy="7" r="2.2" fill="currentColor"/><circle cx="27" cy="7" r="2.2" fill="currentColor"/><circle cx="33" cy="7" r="2.2" fill="currentColor"/><circle cx="38" cy="7" r="2.2" fill="currentColor"/></svg>
+            </button>
+            <button type="button" class="edge-style-opt" data-style="both-dotted-arrow" title="ドット線＋両矢印">
+              <svg width="40" height="14" viewBox="0 0 40 14"><path d="M12 3 L4 7 L12 11 Z" fill="currentColor"/><circle cx="15" cy="7" r="2.2" fill="currentColor"/><circle cx="20" cy="7" r="2.2" fill="currentColor"/><circle cx="25" cy="7" r="2.2" fill="currentColor"/><path d="M28 3 L36 7 L28 11 Z" fill="currentColor"/></svg>
             </button>
             <button type="button" class="edge-style-opt" data-style="wave" title="波線">
               <svg width="40" height="14" viewBox="0 0 40 14"><path d="M2 7 Q6 2 10 7 T18 7 T26 7 T34 7" stroke="currentColor" stroke-width="2" fill="none" stroke-linejoin="round"/></svg>
@@ -869,7 +878,7 @@ function deserialize(text){
       const m=line.match(/^EDGE (\d+) (\d+)(?: (.*))?$/);
       if(m){
         const ed={from:+m[1],to:+m[2]};
-        const STYLE_KEYWORDS=['dashed-arrow','solid','dashed','both-arrow','both-dashed-arrow','wave','square'];
+        const STYLE_KEYWORDS=['dashed-arrow','solid','dashed','both-arrow','both-dashed-arrow','dotted','dotted-arrow','both-dotted-arrow','wave','square'];
         let rest=m[3]||'';
         if(rest){
           const parts=rest.split(' ');
@@ -1980,6 +1989,21 @@ function renderEdgesImpl(){
   // node without altering the curve's shape. Both-end-arrow edges pass a
   // fixedEnd instead (see below) so two independent clearance calculations
   // for the same node can't disagree and collapse the segment.
+  // Dotted edges use a thicker stroke (4 vs 1.5), and markers scale with stroke
+  // width (markerUnits=strokeWidth), so clone each arrow marker at 1.5/4 size to
+  // keep arrowheads the same size as on every other edge style.
+  function ensureDotMarker(id){
+    const nid=id+'-d';
+    if(document.getElementById(nid))return nid;
+    const src=document.getElementById(id);
+    if(!src||!src.parentNode)return id;
+    const c=src.cloneNode(true);
+    c.id=nid;
+    c.setAttribute('markerWidth','2.25');
+    c.setAttribute('markerHeight','2.25');
+    src.parentNode.appendChild(c);
+    return nid;
+  }
   function drawSegment(sx,sy,targetNode,hasArrow,dashArr,strokeW,style,e,fixedEnd,sourceNode){
     const tx=targetNode.x*scale+panX, ty=targetNode.y*scale+panY;
     let ex=tx, ey=ty;
@@ -2053,6 +2077,12 @@ function renderEdgesImpl(){
     const ck=edgeColorKey(e);
     path.setAttribute('stroke',ck?'var(--edge-'+ck+')':'var(--color-edge)');
     path.dataset.markerId=ck?'arr-'+ck:'arr';
+    path.dataset.hoverMarkerId='arr-hover';
+    if(style.indexOf('dotted')!==-1){
+      path.setAttribute('stroke-linecap','round');
+      path.dataset.markerId=ensureDotMarker(path.dataset.markerId);
+      path.dataset.hoverMarkerId=ensureDotMarker('arr-hover');
+    }
     path.setAttribute('stroke-width', String(strokeW));
     if(dashArr)path.setAttribute('stroke-dasharray',dashArr);
     path.setAttribute('class','edge');
@@ -2064,6 +2094,17 @@ function renderEdgesImpl(){
     path.dataset.arrowStart='0';
     if(hasArrow)path.setAttribute('marker-end','url(#'+path.dataset.markerId+')');
     svgEl.appendChild(path);
+    if(hasArrow&&style.indexOf('dotted')!==-1){
+      // A dash pattern repeats to the end of the path, so the last dot would
+      // land on the arrowhead and merge into it. Spell the pattern out for
+      // exactly as many dots as fit before the arrowhead (path length minus
+      // the arrowhead's reach and a small gap), then one huge gap.
+      const per=7*scale,lim=path.getTotalLength()-9*scale;
+      const n=lim>=0?Math.floor(lim/per)+1:1;
+      const da=[];
+      for(let i=0;i<n;i++)da.push(0.01,i<n-1?per:1e6);
+      path.setAttribute('stroke-dasharray',da.join(','));
+    }
     // Wide invisible hit-area on top of the thin visible line, so right-click
     // doesn't require pixel-precise aim on a 1.5px stroke.
     const hit=document.createElementNS('http://www.w3.org/2000/svg','path');
@@ -2147,9 +2188,13 @@ function renderEdgesImpl(){
     if(!a||!b)return;
     if(!isNodeVisible(a.id)||!isNodeVisible(b.id))return;
     const style=e.style||'arrow';
-    const isBoth=(style==='both-arrow'||style==='both-dashed-arrow');
-    const strokeW=1.5*scale;
-    const dashArr=(style==='dashed'||style==='dashed-arrow'||style==='both-dashed-arrow')?(5*scale)+','+(4*scale):null;
+    const isBoth=(style==='both-arrow'||style==='both-dashed-arrow'||style==='both-dotted-arrow');
+    // Dotted styles: round-capped zero-length dashes = filled dots (●). The
+    // dots need a thicker stroke than a plain line to read as dots, so the
+    // arrowheads get their own smaller marker variants (see ensureDotMarker).
+    const isDotted=(style==='dotted'||style==='dotted-arrow'||style==='both-dotted-arrow');
+    const strokeW=(isDotted?4:1.5)*scale;
+    const dashArr=isDotted?('0.01,'+(7*scale)):((style==='dashed'||style==='dashed-arrow'||style==='both-dashed-arrow')?(5*scale)+','+(4*scale):null);
     const ax=a.x*scale+panX, ay=a.y*scale+panY, bx=b.x*scale+panX, by=b.y*scale+panY;
     if(isBoth){
       // A plain center-to-center midpoint isn't symmetric once node sizes
@@ -2162,7 +2207,7 @@ function renderEdgesImpl(){
       if(e.label)appendLabel(geo.mid.x,geo.mid.y,e);
       return;
     }
-    const hasArrowEnd=(style==='arrow'||style==='dashed-arrow');
+    const hasArrowEnd=(style==='arrow'||style==='dashed-arrow'||style==='dotted-arrow');
     let aRect=null;
     const aEl=document.getElementById('node-'+a.id);
     if(aEl){
@@ -2220,8 +2265,8 @@ function applyHoverHighlight(){
       path.classList.add('hover-edge');
       const baseW=+path.dataset.baseWidth||1.5*scale;
       path.setAttribute('stroke-width', String(baseW+1*scale));
-      if(path.dataset.arrow==='1')path.setAttribute('marker-end','url(#arr-hover)');
-      if(path.dataset.arrowStart==='1')path.setAttribute('marker-start','url(#arr-hover)');
+      if(path.dataset.arrow==='1')path.setAttribute('marker-end','url(#'+(path.dataset.hoverMarkerId||'arr-hover')+')');
+      if(path.dataset.arrowStart==='1')path.setAttribute('marker-start','url(#'+(path.dataset.hoverMarkerId||'arr-hover')+')');
     }
   });
 }
@@ -4676,7 +4721,7 @@ function deserialize(text){
       const m=line.match(/^EDGE (\\d+) (\\d+)(?: (.*))?$/);
       if(m){
         const ed={from:+m[1],to:+m[2]};
-        const STYLE_KEYWORDS=['dashed-arrow','solid','dashed','both-arrow','both-dashed-arrow','wave','square'];
+        const STYLE_KEYWORDS=['dashed-arrow','solid','dashed','both-arrow','both-dashed-arrow','dotted','dotted-arrow','both-dotted-arrow','wave','square'];
         let rest=m[3]||'';
         if(rest){
           const parts=rest.split(' ');
@@ -4847,8 +4892,8 @@ function applyHoverHighlight(){
       path.classList.add('hover-edge');
       const baseW=+path.dataset.baseWidth||1.5*scale;
       path.setAttribute('stroke-width',String(baseW+1*scale));
-      if(path.dataset.arrow==='1')path.setAttribute('marker-end','url(#arr-hover)');
-      if(path.dataset.arrowStart==='1')path.setAttribute('marker-start','url(#arr-hover)');
+      if(path.dataset.arrow==='1')path.setAttribute('marker-end','url(#'+(path.dataset.hoverMarkerId||'arr-hover')+')');
+      if(path.dataset.arrowStart==='1')path.setAttribute('marker-start','url(#'+(path.dataset.hoverMarkerId||'arr-hover')+')');
     }
   });
 }
@@ -5482,6 +5527,21 @@ function renderEdgesImpl(){
     const r ={x:q0.x+(q1.x-q0.x)*t0, y:q0.y+(q1.y-q0.y)*t0};
     return {p0:r,p1:q1};
   }
+  // Dotted edges use a thicker stroke (4 vs 1.5), and markers scale with stroke
+  // width (markerUnits=strokeWidth), so clone each arrow marker at 1.5/4 size to
+  // keep arrowheads the same size as on every other edge style.
+  function ensureDotMarker(id){
+    const nid=id+'-d';
+    if(document.getElementById(nid))return nid;
+    const src=document.getElementById(id);
+    if(!src||!src.parentNode)return id;
+    const c=src.cloneNode(true);
+    c.id=nid;
+    c.setAttribute('markerWidth','2.25');
+    c.setAttribute('markerHeight','2.25');
+    src.parentNode.appendChild(c);
+    return nid;
+  }
   function drawSegment(sx,sy,targetNode,hasArrow,dashArr,strokeW,style,e,fixedEnd,sourceNode){
     const tx=targetNode.x*scale+panX, ty=targetNode.y*scale+panY;
     let ex=tx,ey=ty;
@@ -5528,6 +5588,12 @@ function renderEdgesImpl(){
     const ck=edgeColorKey(e);
     path.setAttribute('fill','none');path.setAttribute('stroke',ck?('var(--edge-'+ck+')'):'var(--color-edge)');
     path.dataset.markerId=ck?('arr-'+ck):'arr';
+    path.dataset.hoverMarkerId='arr-hover';
+    if(style.indexOf('dotted')!==-1){
+      path.setAttribute('stroke-linecap','round');
+      path.dataset.markerId=ensureDotMarker(path.dataset.markerId);
+      path.dataset.hoverMarkerId=ensureDotMarker('arr-hover');
+    }
     path.setAttribute('stroke-width',String(strokeW));path.setAttribute('class','edge');
     if(dashArr)path.setAttribute('stroke-dasharray',dashArr);
     path.dataset.from=String(e.from);path.dataset.to=String(e.to);
@@ -5536,6 +5602,17 @@ function renderEdgesImpl(){
     path.dataset.arrowStart='0';
     if(hasArrow)path.setAttribute('marker-end','url(#'+path.dataset.markerId+')');
     svgEl.appendChild(path);
+    if(hasArrow&&style.indexOf('dotted')!==-1){
+      // A dash pattern repeats to the end of the path, so the last dot would
+      // land on the arrowhead and merge into it. Spell the pattern out for
+      // exactly as many dots as fit before the arrowhead (path length minus
+      // the arrowhead's reach and a small gap), then one huge gap.
+      const per=7*scale,lim=path.getTotalLength()-9*scale;
+      const n=lim>=0?Math.floor(lim/per)+1:1;
+      const da=[];
+      for(let i=0;i<n;i++)da.push(0.01,i<n-1?per:1e6);
+      path.setAttribute('stroke-dasharray',da.join(','));
+    }
     return {ex,ey,rect,mx};
   }
   function bothArrowGeometry(ax,ay,bx,by,aId,bId){
@@ -5595,9 +5672,13 @@ function renderEdgesImpl(){
     const a=_nodeById.get(e.from),b=_nodeById.get(e.to);
     if(!a||!b||!isVisible(a.id)||!isVisible(b.id))return;
     const style=e.style||'arrow';
-    const isBoth=(style==='both-arrow'||style==='both-dashed-arrow');
-    const strokeW=1.5*scale;
-    const dashArr=(style==='dashed'||style==='dashed-arrow'||style==='both-dashed-arrow')?(5*scale)+','+(4*scale):null;
+    const isBoth=(style==='both-arrow'||style==='both-dashed-arrow'||style==='both-dotted-arrow');
+    // Dotted styles: round-capped zero-length dashes = filled dots (●). The
+    // dots need a thicker stroke than a plain line to read as dots, so the
+    // arrowheads get their own smaller marker variants (see ensureDotMarker).
+    const isDotted=(style==='dotted'||style==='dotted-arrow'||style==='both-dotted-arrow');
+    const strokeW=(isDotted?4:1.5)*scale;
+    const dashArr=isDotted?('0.01,'+(7*scale)):((style==='dashed'||style==='dashed-arrow'||style==='both-dashed-arrow')?(5*scale)+','+(4*scale):null);
     const ax=a.x*scale+panX,ay=a.y*scale+panY,bx=b.x*scale+panX,by=b.y*scale+panY;
     if(isBoth){
       const geo=bothArrowGeometry(ax,ay,bx,by,a.id,b.id);
@@ -5606,7 +5687,7 @@ function renderEdgesImpl(){
       if(e.label)appendLabel(geo.mid.x,geo.mid.y,e);
       return;
     }
-    const hasArrowEnd=(style==='arrow'||style==='dashed-arrow');
+    const hasArrowEnd=(style==='arrow'||style==='dashed-arrow'||style==='dotted-arrow');
     let aRect=null;
     const aEl=document.getElementById('node-'+a.id);
     if(aEl){
