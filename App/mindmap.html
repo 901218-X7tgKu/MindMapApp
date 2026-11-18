@@ -256,7 +256,11 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
 #edge-modal .edge-label-input{width:100%;font-family:var(--font-sans);font-size:13px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);padding:8px 10px;background:var(--color-background-secondary);color:var(--color-text-primary);outline:none}
 #edge-modal .edge-label-input:focus{border-color:var(--color-border-primary)}
 #edge-modal .edge-style-label{font-size:11px;color:var(--color-text-tertiary);margin-bottom:6px}
-#edge-modal .edge-style-row{display:flex;gap:6px;flex-wrap:wrap}
+#edge-modal .edge-style-row{display:grid;grid-template-columns:auto repeat(3,1fr);gap:6px;align-items:center}
+#edge-modal .edge-style-row .esr-head{font-size:11px;color:var(--color-text-tertiary);text-align:center}
+#edge-modal .edge-style-row .esr-rowlabel{font-size:11px;color:var(--color-text-tertiary);padding-right:6px;white-space:nowrap}
+#edge-modal .edge-style-row .esr-sep{grid-column:1/-1;border-top:0.5px solid var(--color-border-secondary);margin:2px 0}
+#edge-modal .edge-style-row .edge-style-opt{width:100%;justify-content:center}
 #edge-modal .edge-style-opt{padding:7px 10px;color:var(--color-text-secondary)}
 #edge-modal .edge-style-opt.active{color:var(--color-text-info)}
 #edge-modal .edge-color-block{margin:12px 0 12px}
@@ -314,7 +318,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | C: 拡大率を100%に | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.75</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.76</span>
     <button id="btn-zoom-anim" class="zoom-anim-btn active" type="button" aria-pressed="true" style="margin-left:8px;padding:4px 10px;font-size:12px" title="ズームのアニメーション：ON（クリックで切り替え／Cキーと拡大率の直接入力が対象）">アニメ</button>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:6px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
@@ -519,32 +523,47 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
         <div>
           <div class="edge-style-label">線の種類</div>
           <div class="edge-style-row" id="edge-style-row">
+            <!-- Layout: rows = arrow type, columns = line type, so every one-sided
+                 arrow sits in one row, every no-arrow line in the next, and so on.
+                 Selection logic only keys on .edge-style-opt[data-style]. -->
+            <div></div>
+            <div class="esr-head">実線</div>
+            <div class="esr-head">破線</div>
+            <div class="esr-head">ドット線</div>
+            <div class="esr-rowlabel">片矢印</div>
             <button type="button" class="edge-style-opt" data-style="arrow" title="実線＋矢印">
               <svg width="40" height="14" viewBox="0 0 40 14"><line x1="2" y1="7" x2="30" y2="7" stroke="currentColor" stroke-width="2"/><path d="M28 3 L36 7 L28 11 Z" fill="currentColor"/></svg>
             </button>
             <button type="button" class="edge-style-opt" data-style="dashed-arrow" title="破線＋矢印">
               <svg width="40" height="14" viewBox="0 0 40 14"><line x1="2" y1="7" x2="30" y2="7" stroke="currentColor" stroke-width="2" stroke-dasharray="5,4"/><path d="M28 3 L36 7 L28 11 Z" fill="currentColor"/></svg>
             </button>
+            <button type="button" class="edge-style-opt" data-style="dotted-arrow" title="ドット線＋矢印">
+              <svg width="40" height="14" viewBox="0 0 40 14"><circle cx="3" cy="7" r="2.2" fill="currentColor"/><circle cx="9" cy="7" r="2.2" fill="currentColor"/><circle cx="15" cy="7" r="2.2" fill="currentColor"/><circle cx="21" cy="7" r="2.2" fill="currentColor"/><path d="M28 3 L36 7 L28 11 Z" fill="currentColor"/></svg>
+            </button>
+            <div class="esr-rowlabel">矢印なし</div>
             <button type="button" class="edge-style-opt" data-style="solid" title="実線（矢印なし）">
               <svg width="40" height="14" viewBox="0 0 40 14"><line x1="2" y1="7" x2="38" y2="7" stroke="currentColor" stroke-width="2"/></svg>
             </button>
             <button type="button" class="edge-style-opt" data-style="dashed" title="破線（矢印なし）">
               <svg width="40" height="14" viewBox="0 0 40 14"><line x1="2" y1="7" x2="38" y2="7" stroke="currentColor" stroke-width="2" stroke-dasharray="5,4"/></svg>
             </button>
+            <button type="button" class="edge-style-opt" data-style="dotted" title="ドット線（矢印なし）">
+              <svg width="40" height="14" viewBox="0 0 40 14"><circle cx="3" cy="7" r="2.2" fill="currentColor"/><circle cx="9" cy="7" r="2.2" fill="currentColor"/><circle cx="15" cy="7" r="2.2" fill="currentColor"/><circle cx="21" cy="7" r="2.2" fill="currentColor"/><circle cx="27" cy="7" r="2.2" fill="currentColor"/><circle cx="33" cy="7" r="2.2" fill="currentColor"/><circle cx="38" cy="7" r="2.2" fill="currentColor"/></svg>
+            </button>
+            <div class="esr-rowlabel">両矢印</div>
             <button type="button" class="edge-style-opt" data-style="both-arrow" title="実線＋両矢印">
               <svg width="40" height="14" viewBox="0 0 40 14"><line x1="12" y1="7" x2="28" y2="7" stroke="currentColor" stroke-width="2"/><path d="M12 3 L4 7 L12 11 Z" fill="currentColor"/><path d="M28 3 L36 7 L28 11 Z" fill="currentColor"/></svg>
             </button>
             <button type="button" class="edge-style-opt" data-style="both-dashed-arrow" title="破線＋両矢印">
               <svg width="40" height="14" viewBox="0 0 40 14"><line x1="12" y1="7" x2="28" y2="7" stroke="currentColor" stroke-width="2" stroke-dasharray="5,4"/><path d="M12 3 L4 7 L12 11 Z" fill="currentColor"/><path d="M28 3 L36 7 L28 11 Z" fill="currentColor"/></svg>
             </button>
-            <button type="button" class="edge-style-opt" data-style="dotted-arrow" title="ドット線＋矢印">
-              <svg width="40" height="14" viewBox="0 0 40 14"><circle cx="3" cy="7" r="2.2" fill="currentColor"/><circle cx="9" cy="7" r="2.2" fill="currentColor"/><circle cx="15" cy="7" r="2.2" fill="currentColor"/><circle cx="21" cy="7" r="2.2" fill="currentColor"/><path d="M28 3 L36 7 L28 11 Z" fill="currentColor"/></svg>
-            </button>
-            <button type="button" class="edge-style-opt" data-style="dotted" title="ドット線（矢印なし）">
-              <svg width="40" height="14" viewBox="0 0 40 14"><circle cx="3" cy="7" r="2.2" fill="currentColor"/><circle cx="9" cy="7" r="2.2" fill="currentColor"/><circle cx="15" cy="7" r="2.2" fill="currentColor"/><circle cx="21" cy="7" r="2.2" fill="currentColor"/><circle cx="27" cy="7" r="2.2" fill="currentColor"/><circle cx="33" cy="7" r="2.2" fill="currentColor"/><circle cx="38" cy="7" r="2.2" fill="currentColor"/></svg>
-            </button>
             <button type="button" class="edge-style-opt" data-style="both-dotted-arrow" title="ドット線＋両矢印">
               <svg width="40" height="14" viewBox="0 0 40 14"><path d="M12 3 L4 7 L12 11 Z" fill="currentColor"/><circle cx="15" cy="7" r="2.2" fill="currentColor"/><circle cx="20" cy="7" r="2.2" fill="currentColor"/><circle cx="25" cy="7" r="2.2" fill="currentColor"/><path d="M28 3 L36 7 L28 11 Z" fill="currentColor"/></svg>
+            </button>
+            <div class="esr-sep"></div>
+            <div class="esr-rowlabel">その他</div>
+            <button type="button" class="edge-style-opt" data-style="arrow-only" title="矢印のみ（&gt;&gt;&gt;&gt;）">
+              <svg width="40" height="14" viewBox="0 0 40 14"><path d="M4 3 L8 7 L4 11 M13 3 L17 7 L13 11 M22 3 L26 7 L22 11 M31 3 L35 7 L31 11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
             <button type="button" class="edge-style-opt" data-style="wave" title="波線">
               <svg width="40" height="14" viewBox="0 0 40 14"><path d="M2 7 Q6 2 10 7 T18 7 T26 7 T34 7" stroke="currentColor" stroke-width="2" fill="none" stroke-linejoin="round"/></svg>
@@ -878,7 +897,7 @@ function deserialize(text){
       const m=line.match(/^EDGE (\d+) (\d+)(?: (.*))?$/);
       if(m){
         const ed={from:+m[1],to:+m[2]};
-        const STYLE_KEYWORDS=['dashed-arrow','solid','dashed','both-arrow','both-dashed-arrow','dotted','dotted-arrow','both-dotted-arrow','wave','square'];
+        const STYLE_KEYWORDS=['dashed-arrow','solid','dashed','both-arrow','both-dashed-arrow','dotted','dotted-arrow','both-dotted-arrow','arrow-only','wave','square'];
         let rest=m[3]||'';
         if(rest){
           const parts=rest.split(' ');
@@ -2004,6 +2023,36 @@ function renderEdgesImpl(){
     src.parentNode.appendChild(c);
     return nid;
   }
+  // Chevron chain (>>>>) for the arrow-only style: open V shapes laid out at
+  // even arc-length spacing along the edge's quadratic curve, each rotated to
+  // the curve's local direction (parent -> child), all in one stroked path.
+  function chevronChainPath(p0,p1,p2){
+    const N=64,xs=[p0.x],ys=[p0.y],cum=[0];
+    for(let i=1;i<=N;i++){
+      const t=i/N,u=1-t;
+      xs.push(u*u*p0.x+2*u*t*p1.x+t*t*p2.x);
+      ys.push(u*u*p0.y+2*u*t*p1.y+t*t*p2.y);
+      cum.push(cum[i-1]+Math.hypot(xs[i]-xs[i-1],ys[i]-ys[i-1]));
+    }
+    const total=cum[N],h=5*scale,w=3.6*scale,period=10*scale;
+    const start=h/2+3*scale,end=total-h/2-2*scale;
+    if(end<start)return '';
+    const n=Math.floor((end-start)/period)+1;
+    const step=n>1?(end-start)/(n-1):0;
+    let d='',seg=0;
+    for(let k=0;k<n;k++){
+      const len=n>1?start+k*step:(start+end)/2;
+      while(seg<N-1&&cum[seg+1]<len)seg++;
+      const span=cum[seg+1]-cum[seg]||1;
+      const f=Math.min(1,Math.max(0,(len-cum[seg])/span));
+      const cx=xs[seg]+(xs[seg+1]-xs[seg])*f,cy=ys[seg]+(ys[seg+1]-ys[seg])*f;
+      const tx=(xs[seg+1]-xs[seg])/span,ty=(ys[seg+1]-ys[seg])/span;
+      const nx=-ty,ny=tx;
+      const tipX=cx+tx*h/2,tipY=cy+ty*h/2,bx=cx-tx*h/2,by=cy-ty*h/2;
+      d+='M'+(bx+nx*w).toFixed(1)+' '+(by+ny*w).toFixed(1)+'L'+tipX.toFixed(1)+' '+tipY.toFixed(1)+'L'+(bx-nx*w).toFixed(1)+' '+(by-ny*w).toFixed(1);
+    }
+    return d;
+  }
   function drawSegment(sx,sy,targetNode,hasArrow,dashArr,strokeW,style,e,fixedEnd,sourceNode){
     const tx=targetNode.x*scale+panX, ty=targetNode.y*scale+panY;
     let ex=tx, ey=ty;
@@ -2093,6 +2142,15 @@ function renderEdgesImpl(){
     path.dataset.arrow=hasArrow?'1':'0';
     path.dataset.arrowStart='0';
     if(hasArrow)path.setAttribute('marker-end','url(#'+path.dataset.markerId+')');
+    // Arrow-only style (>>>>): the line is a chain of chevrons pointing from
+    // parent to child, drawn as ordinary stroked geometry, so colour, hover
+    // (orange + thicker stroke) and the full-length hit area all work like
+    // any other style with no special cases.
+    if(style==='arrow-only'){
+      path.setAttribute('d',chevronChainPath(p0,p1,p2));
+      path.setAttribute('stroke-linecap','round');
+      path.setAttribute('stroke-linejoin','round');
+    }
     svgEl.appendChild(path);
     if(hasArrow&&style.indexOf('dotted')!==-1){
       // A dash pattern repeats to the end of the path, so the last dot would
@@ -4721,7 +4779,7 @@ function deserialize(text){
       const m=line.match(/^EDGE (\\d+) (\\d+)(?: (.*))?$/);
       if(m){
         const ed={from:+m[1],to:+m[2]};
-        const STYLE_KEYWORDS=['dashed-arrow','solid','dashed','both-arrow','both-dashed-arrow','dotted','dotted-arrow','both-dotted-arrow','wave','square'];
+        const STYLE_KEYWORDS=['dashed-arrow','solid','dashed','both-arrow','both-dashed-arrow','dotted','dotted-arrow','both-dotted-arrow','arrow-only','wave','square'];
         let rest=m[3]||'';
         if(rest){
           const parts=rest.split(' ');
@@ -5542,6 +5600,36 @@ function renderEdgesImpl(){
     src.parentNode.appendChild(c);
     return nid;
   }
+  // Chevron chain (>>>>) for the arrow-only style: open V shapes laid out at
+  // even arc-length spacing along the edge's quadratic curve, each rotated to
+  // the curve's local direction (parent -> child), all in one stroked path.
+  function chevronChainPath(p0,p1,p2){
+    const N=64,xs=[p0.x],ys=[p0.y],cum=[0];
+    for(let i=1;i<=N;i++){
+      const t=i/N,u=1-t;
+      xs.push(u*u*p0.x+2*u*t*p1.x+t*t*p2.x);
+      ys.push(u*u*p0.y+2*u*t*p1.y+t*t*p2.y);
+      cum.push(cum[i-1]+Math.hypot(xs[i]-xs[i-1],ys[i]-ys[i-1]));
+    }
+    const total=cum[N],h=5*scale,w=3.6*scale,period=10*scale;
+    const start=h/2+3*scale,end=total-h/2-2*scale;
+    if(end<start)return '';
+    const n=Math.floor((end-start)/period)+1;
+    const step=n>1?(end-start)/(n-1):0;
+    let d='',seg=0;
+    for(let k=0;k<n;k++){
+      const len=n>1?start+k*step:(start+end)/2;
+      while(seg<N-1&&cum[seg+1]<len)seg++;
+      const span=cum[seg+1]-cum[seg]||1;
+      const f=Math.min(1,Math.max(0,(len-cum[seg])/span));
+      const cx=xs[seg]+(xs[seg+1]-xs[seg])*f,cy=ys[seg]+(ys[seg+1]-ys[seg])*f;
+      const tx=(xs[seg+1]-xs[seg])/span,ty=(ys[seg+1]-ys[seg])/span;
+      const nx=-ty,ny=tx;
+      const tipX=cx+tx*h/2,tipY=cy+ty*h/2,bx=cx-tx*h/2,by=cy-ty*h/2;
+      d+='M'+(bx+nx*w).toFixed(1)+' '+(by+ny*w).toFixed(1)+'L'+tipX.toFixed(1)+' '+tipY.toFixed(1)+'L'+(bx-nx*w).toFixed(1)+' '+(by-ny*w).toFixed(1);
+    }
+    return d;
+  }
   function drawSegment(sx,sy,targetNode,hasArrow,dashArr,strokeW,style,e,fixedEnd,sourceNode){
     const tx=targetNode.x*scale+panX, ty=targetNode.y*scale+panY;
     let ex=tx,ey=ty;
@@ -5601,6 +5689,15 @@ function renderEdgesImpl(){
     path.dataset.arrow=hasArrow?'1':'0';
     path.dataset.arrowStart='0';
     if(hasArrow)path.setAttribute('marker-end','url(#'+path.dataset.markerId+')');
+    // Arrow-only style (>>>>): the line is a chain of chevrons pointing from
+    // parent to child, drawn as ordinary stroked geometry, so colour, hover
+    // (orange + thicker stroke) and the full-length hit area all work like
+    // any other style with no special cases.
+    if(style==='arrow-only'){
+      path.setAttribute('d',chevronChainPath(p0,p1,p2));
+      path.setAttribute('stroke-linecap','round');
+      path.setAttribute('stroke-linejoin','round');
+    }
     svgEl.appendChild(path);
     if(hasArrow&&style.indexOf('dotted')!==-1){
       // A dash pattern repeats to the end of the path, so the last dot would
