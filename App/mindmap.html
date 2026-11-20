@@ -318,7 +318,7 @@ button.danger:hover{background:var(--color-background-danger);color:var(--color-
   <div id="header">
     <h1 id="map-title" title="クリックしてタイトルを編集" style="cursor:pointer;display:flex;align-items:center;gap:6px">🗺 <span id="map-title-text">マインドマップ</span><i class="ti ti-pencil" style="font-size:11px;opacity:.4;font-weight:400"></i></h1>
     <span style="font-size:11px;color:var(--color-text-tertiary)">右クリック: 編集 | Shift+右クリック: 削除 | Ctrl+左クリック×2: 接続 | Ctrl+右クリック: 属性編集 | Ctrl+Shift+右クリック: URLを開く | C: 拡大率を100%に | WASD: スクロール </span>
-    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.76</span>
+    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0">v2.77</span>
     <button id="btn-zoom-anim" class="zoom-anim-btn active" type="button" aria-pressed="true" style="margin-left:8px;padding:4px 10px;font-size:12px" title="ズームのアニメーション：ON（クリックで切り替え／Cキーと拡大率の直接入力が対象）">アニメ</button>
     <button id="btn-theme" title="ダーク/ライト切り替え" style="margin-left:6px;padding:4px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--font-sans)">
       <i id="theme-icon" class="ti ti-moon"></i>
@@ -4620,27 +4620,25 @@ function generatePublicHtml(){
   // excluded from the exported data (not merely hidden by CSS/JS), so that
   // the content isn't visible even by opening the public HTML file as plain
   // text (e.g. in a text editor).
+  // A node is excluded by two kinds of link, and both must be followed from
+  // every excluded node, however they alternate:
+  //   - tree edges (from -> to): the node's descendants, and
+  //   - group membership (groupId): a group's members.
+  // A group member can itself have children outside the group, and those
+  // children may in turn be groups with their own members, and so on, so
+  // this is a worklist that runs until nothing new is added. Following only
+  // tree edges first and group members afterwards (as it used to) misses
+  // everything reachable only through a member's own children.
   const excludedIds=new Set();
-  nodes.forEach(n=>{
-    if(n.private===true){
-      excludedIds.add(n.id);
-      getAllDescendantIds(n.id).forEach(id=>excludedIds.add(id));
-    }
-  });
-  // A private group's members (linked via groupId, not tree edges) must be
-  // excluded too, or their content would still leak into the public export
-  // even though the group frame around them is hidden. Repeated to a fixed
-  // point so members of members (a nested sub-group's own members) are
-  // excluded transitively as well, regardless of node array order.
-  let addedMore=true;
-  while(addedMore){
-    addedMore=false;
-    nodes.forEach(n=>{
-      if(n.groupId&&excludedIds.has(n.groupId)&&!excludedIds.has(n.id)){
-        excludedIds.add(n.id);
-        addedMore=true;
-      }
-    });
+  const excludeQueue=[];
+  const addExcluded=id=>{
+    if(!excludedIds.has(id)){excludedIds.add(id);excludeQueue.push(id);}
+  };
+  nodes.forEach(n=>{if(n.private===true)addExcluded(n.id);});
+  while(excludeQueue.length){
+    const id=excludeQueue.shift();
+    edges.forEach(e=>{if(e.from===id)addExcluded(e.to);});
+    nodes.forEach(m=>{if(m.groupId===id)addExcluded(m.id);});
   }
   const origNodes=nodes, origEdges=edges, origCollapsed=collapsedNodes;
   let mapData;
